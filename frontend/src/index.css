@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+:root {
+  --foxboard-purple: #7c3aed;
+  --foxboard-pink: #ec4899;
+  --foxboard-gold: #f59e0b;
+  --foxboard-bg: #0f0f1a;
+  --foxboard-surface: #1a1a2e;
+  --foxboard-border: #2d2d44;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: var(--foxboard-bg);
+  color: #e2e8f0;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
