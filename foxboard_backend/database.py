@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 # 数据库文件路径（Notebook 项目目录）
-DB_PATH = Path("/home/muyin/.openclaw/workspace/Notebook/70_花火项目/FoxBoard/data/foxboard.db")
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "foxboard.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 def get_conn() -> sqlite3.Connection:

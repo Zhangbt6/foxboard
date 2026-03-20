@@ -83,6 +83,7 @@ class TaskCreate(BaseModel):
     id: str
     title: str
     description: Optional[str] = None
+    status: Optional[TaskStatus] = None
     priority: int = Field(default=0, ge=0, le=10)
     assignee_id: Optional[str] = None
     project_id: Optional[str] = None

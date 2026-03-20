@@ -135,17 +135,55 @@ def push_to_staroffice(payload):
 
 
 def push_to_foxboard_api(payload):
-    """推送到 FoxBoard 后端 API（扩展 payload）"""
-    foxboard_url = os.environ.get("FOXBOARD_API_URL", "http://127.0.0.1:18000")
+    """推送到 FoxBoard 后端 API（heartbeat v2）"""
+    foxboard_url = os.environ.get("FOXBOARD_API_URL", "http://localhost:8000")
+    agent_id = payload["agent"]
     try:
         import requests
-        r = requests.post(f"{foxboard_url}/api/agent-push", json=payload, timeout=5)
+
+        # 先尝试注册（幂等）
+        try:
+            reg_payload = {
+                "agent_id": agent_id,
+                "name": payload["agent"],
+                "role": os.environ.get("FOXBOARD_AGENT_ROLE", "worker"),
+            }
+            requests.post(f"{foxboard_url}/agents/register", json=reg_payload, timeout=5)
+        except Exception:
+            pass  # 已注册则忽略
+
+        # 心跳上报
+        status_map = {
+            "idle": "idle",
+            "writing": "busy",
+            "researching": "busy",
+            "executing": "busy",
+            "syncing": "busy",
+            "reviewing": "busy",
+            "error": "idle",
+        }
+        event_map = {
+            "heartbeat": "idle",
+            "claim_task": "busy",
+            "update_task": "busy",
+            "submit_result": "busy",
+            "report_blocker": "busy",
+            "complete_task": "idle",
+        }
+        hb_payload = {
+            "agent_id": agent_id,
+            "status": status_map.get(payload["status"], "idle"),
+            "task_id": payload["task"] if payload["task"] != "-" else None,
+            "project_id": payload.get("project"),
+            "priority": int(payload["priority"]) if str(payload["priority"]).isdigit() else 0,
+        }
+        r = requests.post(f"{foxboard_url}/agents/heartbeat", json=hb_payload, timeout=5)
         if r.status_code in (200, 201):
-            print(f"✅ 已推送至 FoxBoard API ({foxboard_url})")
+            print(f"✅ FoxBoard 心跳已推送 ({foxboard_url}/agents/heartbeat)")
         else:
-            print(f"⚠️ FoxBoard API 响应: {r.status_code}")
+            print(f"⚠️ FoxBoard API 响应: {r.status_code} - {r.text[:100]}")
     except ImportError:
-        pass
+        print("⚠️ requests 库未安装，跳过 FoxBoard 推送")
     except Exception as e:
         print(f"⚠️ FoxBoard API 推送失败: {e}")
 

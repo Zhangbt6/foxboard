@@ -83,11 +83,13 @@ def create_task(payload: TaskCreate):
     conn = get_conn()
     cursor = conn.cursor()
     now = datetime.utcnow().isoformat()
+    # 状态：如果未指定则默认为 TODO
+    task_status = payload.status.value if payload.status else "TODO"
     try:
         cursor.execute("""
-            INSERT INTO tasks (id, title, description, priority, assignee_id, project_id, tags, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (payload.id, payload.title, payload.description, payload.priority,
+            INSERT INTO tasks (id, title, description, status, priority, assignee_id, project_id, tags, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (payload.id, payload.title, payload.description, task_status, payload.priority,
               payload.assignee_id, payload.project_id, payload.tags, now, now))
         conn.commit()
         cursor.execute("SELECT * FROM tasks WHERE id = ?", (payload.id,))
