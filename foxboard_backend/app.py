@@ -2,31 +2,67 @@
 FoxBoard 后端主入口 - FastAPI
 提供任务看板 + Agent 管理 API
 """
+import os
+import threading
+import time
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from foxboard_backend.database import init_db
+from foxboard_backend.database import init_db, migrate_add_columns
 from foxboard_backend.routers import agents, tasks, events, workflows
 
-# 初始化数据库
-init_db()
+TIMEOUT_INTERVAL = int(os.environ.get("TASK_TIMEOUT_INTERVAL_SECONDS", "300"))  # 默认5分钟检测一次
+
+_timer_lock = threading.Lock()
+_scheduler_running = True
+
+def _timeout_scheduler():
+    """后台线程：定期扫描超时任务"""
+    global _scheduler_running
+    while _scheduler_running:
+        time.sleep(TIMEOUT_INTERVAL)
+        if not _scheduler_running:
+            break
+        try:
+            # 延迟导入避免循环依赖
+            from foxboard_backend.routers.tasks import _check_timeouts
+            triggered = _check_timeouts()
+            if triggered:
+                print(f"[SCHEDULER] 超时任务: {triggered}")
+        except Exception as e:
+            print(f"[SCHEDULER] 超时检测异常: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时
+    init_db()
+    migrate_add_columns()
+    global _scheduler_running
+    _scheduler_running = True
+    t = threading.Thread(target=_timeout_scheduler, daemon=True)
+    t.start()
+    print(f"[SCHEDULER] 超时检测线程已启动（间隔 {TIMEOUT_INTERVAL}s）")
+    yield
+    # 关闭时
+    _scheduler_running = False
 
 app = FastAPI(
     title="FoxBoard API",
     description="花火看板系统后端 API",
-    version="0.1.0",
+    version="0.4.0",
+    lifespan=lifespan,
 )
 
-# CORS：允许前端开发服务器访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # 开发环境全允许，生产环境应限制
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 注册路由
 app.include_router(agents.router)
 app.include_router(tasks.router)
 app.include_router(events.router)
@@ -34,7 +70,7 @@ app.include_router(workflows.router)
 
 @app.get("/", tags=["health"])
 def root():
-    return {"status": "ok", "service": "FoxBoard API", "version": "0.1.0"}
+    return {"status": "ok", "service": "FoxBoard API", "version": "0.4.0"}
 
 @app.get("/health", tags=["health"])
 def health():

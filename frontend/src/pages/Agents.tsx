@@ -80,10 +80,15 @@ export default function Agents() {
     } catch { return iso; }
   };
 
+  const selectAgent = (agentId: string) => {
+    localStorage.setItem('foxboard_agent_id', agentId);
+    window.location.href = '/my';
+  };
+
   return (
     <div style={{ padding: 32 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>成员状态</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700 }}>成员状态 <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>（点击成员卡片进入「我的任务」视图）</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {lastUpdated && (
             <span style={{ fontSize: 11, color: '#475569' }}>
@@ -105,7 +110,12 @@ export default function Agents() {
               border: `1px solid ${meta.color}33`,
               borderRadius: 16, padding: 24,
               display: 'flex', gap: 20, alignItems: 'flex-start',
-            }}>
+              cursor: 'pointer',
+              transition: 'border-color 0.15s',
+            }}
+            onClick={() => selectAgent(agent.id)}
+            title="点击进入该成员的任务队列"
+          >
               <FoxAvatar agentId={agent.id} size={72} />
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>

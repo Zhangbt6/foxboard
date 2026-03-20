@@ -14,7 +14,7 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 def get_conn() -> sqlite3.Connection:
     """获取数据库连接（每次请求新建连接，SQLite 适合此模式）"""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row  # 支持列名访问
+    conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
@@ -51,7 +51,7 @@ def init_db():
         )
     """)
 
-    # tasks 表
+    # tasks 表（v0.4.0 新增 started_at / depends_on 字段）
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id TEXT PRIMARY KEY,
@@ -62,6 +62,8 @@ def init_db():
             assignee_id TEXT,
             project_id TEXT,
             tags TEXT,
+            started_at TEXT,
+            depends_on TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             completed_at TEXT
@@ -83,7 +85,7 @@ def init_db():
         )
     """)
 
-    # workflows 表（流程图实例）
+    # workflows 表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS workflows (
             id TEXT PRIMARY KEY,
@@ -94,7 +96,7 @@ def init_db():
         )
     """)
 
-    # workflow_node_states 表（流程图节点状态）
+    # workflow_node_states 表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS workflow_node_states (
             workflow_id TEXT NOT NULL,
@@ -112,5 +114,23 @@ def init_db():
     conn.close()
     print(f"[DB] 数据库初始化完成: {DB_PATH}")
 
+def migrate_add_columns():
+    """增量迁移：为已有表添加新字段（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    for col_def in [
+        "ADD COLUMN started_at TEXT",
+        "ADD COLUMN depends_on TEXT",
+    ]:
+        col_name = col_def.split()[-1]
+        cursor.execute(f"PRAGMA table_info(tasks)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if col_name not in cols:
+            cursor.execute(f"ALTER TABLE tasks {col_def}")
+            print(f"[DB] 迁移：tasks 表新增 {col_name} 字段")
+    conn.commit()
+    conn.close()
+
 if __name__ == "__main__":
     init_db()
+    migrate_add_columns()

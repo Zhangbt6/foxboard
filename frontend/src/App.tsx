@@ -5,6 +5,7 @@ import Kanban from './pages/Kanban';
 import Agents from './pages/Agents';
 import Workflow from './pages/Workflow';
 import Activity from './pages/Activity';
+import MyTasks from './pages/MyTasks';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="/agents" element={<Agents />} />
           <Route path="/workflow" element={<Workflow />} />
           <Route path="/activity" element={<Activity />} />
+          <Route path="/my-tasks" element={<MyTasks />} />
         </Routes>
       </Layout>
     </BrowserRouter>

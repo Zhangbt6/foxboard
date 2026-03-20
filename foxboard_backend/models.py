@@ -88,6 +88,7 @@ class TaskCreate(BaseModel):
     assignee_id: Optional[str] = None
     project_id: Optional[str] = None
     tags: Optional[str] = None
+    depends_on: Optional[str] = None  # 逗号分隔的任务ID列表
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -97,6 +98,7 @@ class TaskUpdate(BaseModel):
     assignee_id: Optional[str] = None
     project_id: Optional[str] = None
     tags: Optional[str] = None
+    depends_on: Optional[str] = None
 
 class Task(BaseModel):
     id: str
@@ -107,6 +109,8 @@ class Task(BaseModel):
     assignee_id: Optional[str] = None
     project_id: Optional[str] = None
     tags: Optional[str] = None
+    started_at: Optional[str] = None   # DOING 任务的开始时间
+    depends_on: Optional[str] = None   # 逗号分隔的依赖任务ID
     created_at: str
     updated_at: str
     completed_at: Optional[str] = None

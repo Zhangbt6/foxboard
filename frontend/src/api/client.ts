@@ -25,6 +25,9 @@ export const getTasks = (params?: { status?: string; assignee_id?: string; proje
 export const getKanban = (project_id?: string) =>
   api.get('/tasks/kanban', { params: { project_id } });
 
+export const getMyTasks = (agent_id: string, status?: string) =>
+  api.get('/tasks/my', { params: { agent_id, status } });
+
 export const createTask = (task: {
   id: string;
   title: string;
@@ -39,7 +42,7 @@ export const updateTask = (task_id: string, updates: Record<string, unknown>) =>
   api.patch(`/tasks/${task_id}`, updates);
 
 // ---- Events ----
-export const getEvents = (params?: { task_id?: string; agent_id?: string; limit?: number }) =>
+export const getEvents = (params?: { task_id?: string; agent_id?: string; event_type?: string; limit?: number }) =>
   api.get('/events/', { params });
 
 export const createEvent = (event: {
