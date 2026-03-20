@@ -5,6 +5,13 @@ All notable changes to **FoxBoard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-21
+
+### Added
+- **数据适配层** (TASK-FB-027): agents 表新增 `state_detail` 字段 + `PATCH /agents/{id}/state-detail` API
+- **game.js 数据源适配** (TASK-FB-028): `OfficeAdapter.ts` 实现 FoxBoard API → game.js 格式转换，fetch 拦截器自动映射
+- **像素办公室页面** (TASK-FB-029): `/office` 页面，Phaser 游戏内嵌 + 四狐实时状态展示
+
 ## [0.4.0] - 2026-03-21
 
 ### Added
