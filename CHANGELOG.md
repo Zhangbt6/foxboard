@@ -8,6 +8,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.3.0] - 2026-03-20
 
 ### Added
+- **流程图节点自动点亮** (TASK-FB-017): 前端节点根据后端状态自动变色
+  - 灰=未开始 / 蓝=进行中 / 绿=完成 / 黄=审核中 / 红=阻塞
+  - 阻塞节点高亮闪烁效果（CSS animation）
+  - 节点颜色实时从后端 `/workflows/{id}/nodes` API 拉取
 - **流程图节点状态同步后端** (TASK-FB-016): 新增 workflows + workflow_node_states 表及 API
   - `workflows` 表：工作流定义（name, project_id, status）
   - `workflow_node_states` 表：节点实时状态（node_id, task_id, color, updated_at）
