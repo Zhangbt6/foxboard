@@ -33,6 +33,7 @@ def init_db():
             current_project_id TEXT,
             priority INTEGER DEFAULT 0,
             last_heartbeat TEXT,
+            state_detail TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
@@ -113,6 +114,18 @@ def init_db():
     conn.commit()
     conn.close()
     print(f"[DB] 数据库初始化完成: {DB_PATH}")
+
+def migrate_add_state_detail():
+    """v0.5.0 迁移：agents 表新增 state_detail 字段"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(agents)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if "state_detail" not in cols:
+        cursor.execute("ALTER TABLE agents ADD COLUMN state_detail TEXT")
+        print("[DB] 迁移：agents 表新增 state_detail 字段")
+    conn.commit()
+    conn.close()
 
 def migrate_add_columns():
     """

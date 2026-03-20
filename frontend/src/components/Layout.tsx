@@ -1,4 +1,4 @@
-import { LayoutDashboard, Kanban, Users, GitBranch, Activity, ListTodo } from 'lucide-react';
+import { LayoutDashboard, Kanban, Users, GitBranch, Activity, ListTodo, Grid } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/workflow', icon: GitBranch, label: '流程图' },
   { to: '/activity', icon: Activity, label: '事件流' },
   { to: '/my-tasks', icon: ListTodo, label: '我的任务' },
+  { to: '/office', icon: Grid, label: '像素办公室' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {

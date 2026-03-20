@@ -59,6 +59,7 @@ class Agent(BaseModel):
     current_project_id: Optional[str] = None
     priority: int = 0
     last_heartbeat: Optional[str] = None
+    state_detail: Optional[str] = None
     created_at: str
     updated_at: str
 

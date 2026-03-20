@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FoxBoard 像素办公室</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a14;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+    }
+    #status-bar {
+      width: 100%;
+      max-width: 1280px;
+      padding: 8px 16px;
+      background: rgba(124,58,237,0.1);
+      border-bottom: 1px solid #2d2d44;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #status-text {
+      font-size: 13px;
+      color: #94a3b8;
+      font-family: 'Courier New', monospace;
+    }
+    #status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 6px #4ade80;
+      flex-shrink: 0;
+    }
+    #game-container {
+      width: 100%;
+      max-width: 1280px;
+      flex: 1;
+    }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div id="status-bar">
+    <div id="status-dot"></div>
+    <div id="status-text">[idle] ...</div>
+  </div>
+  <div id="game-container"></div>
+
+  <script>
+    // ============================================================
+    // FoxBoard API 拦截器
+    // game.js 加载前安装，将 /status 和 /agents 重定向到 FoxBoard 后端
+    // ============================================================
+    var __FOXBOARD_API__ = 'http://localhost:8000';
+    var __originalFetch__ = window.fetch.bind(window);
+
+    window.fetch = function(input, ...args) {
+      var url = typeof input === 'string' ? input :
+                (input instanceof Request ? input.url : String(input));
+
+      if (url === '/status' || url === '/status/') {
+        return __originalFetch__(__FOXBOARD_API__ + '/agents/')
+          .then(function(r) { return r.json(); })
+          .then(function(agents) {
+            // 取 commander（花火）作为主状态
+            var main = agents.find(function(a) { return a.role === 'commander'; }) || agents[0];
+            if (!main) return new Response(JSON.stringify({ state: 'idle', detail: '...' }), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+            var STATE_MAP = {
+              idle: 'idle', busy: 'writing', writing: 'writing',
+              researching: 'researching', executing: 'executing',
+              syncing: 'syncing', reviewing: 'writing', error: 'error'
+            };
+            var AREA_MAP = {
+              idle: 'breakroom', busy: 'writing', writing: 'writing',
+              researching: 'serverroom', executing: 'serverroom',
+              syncing: 'serverroom', reviewing: 'writing', error: 'error'
+            };
+            var state = STATE_MAP[main.status] || 'idle';
+            var detail = main.state_detail || '...';
+            return new Response(JSON.stringify({ state: state, detail: detail }), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+      }
+
+      if (url === '/agents' || url === '/agents/') {
+        return __originalFetch__(__FOXBOARD_API__ + '/agents/')
+          .then(function(r) { return r.json(); })
+          .then(function(agents) {
+            var STATE_MAP = {
+              idle: 'idle', busy: 'writing', writing: 'writing',
+              researching: 'researching', executing: 'executing',
+              syncing: 'syncing', reviewing: 'writing', error: 'error'
+            };
+            var AREA_MAP = {
+              idle: 'breakroom', busy: 'writing', writing: 'writing',
+              researching: 'serverroom', executing: 'serverroom',
+              syncing: 'serverroom', reviewing: 'writing', error: 'error'
+            };
+            var gameAgents = (Array.isArray(agents) ? agents : []).map(function(a) {
+              return {
+                agentId: a.id,
+                name: a.name,
+                isMain: a.role === 'commander',
+                state: STATE_MAP[a.status] || 'idle',
+                detail: a.state_detail || '',
+                area: AREA_MAP[a.status] || 'breakroom',
+                authStatus: a.status === 'offline' ? 'offline' : 'approved',
+                updated_at: a.last_heartbeat || new Date().toISOString()
+              };
+            });
+            return new Response(JSON.stringify(gameAgents), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+      }
+
+      return __originalFetch__(input, ...args);
+    };
+    console.log('[Office] FoxBoard fetch interceptor installed');
+  </script>
+
+  <!-- Phaser 3 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+
+  <!-- Game Script -->
+  <script>
+    // Overwrite VERSION_TIMESTAMP placeholder with current time
+    var VERSION_TIMESTAMP = Date.now();
+  </script>
+  <script src="game.js?v=5"></script>
+</body>
+</html>

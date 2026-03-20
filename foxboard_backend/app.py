@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from foxboard_backend.database import init_db, migrate_add_columns
+from foxboard_backend.database import init_db, migrate_add_columns, migrate_add_state_detail
 from foxboard_backend.routers import agents, tasks, events, workflows
 
 TIMEOUT_INTERVAL = int(os.environ.get("TASK_TIMEOUT_INTERVAL_SECONDS", "300"))  # 默认5分钟检测一次
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
     # 启动时
     init_db()
     migrate_add_columns()
+    migrate_add_state_detail()
     global _scheduler_running
     _scheduler_running = True
     t = threading.Thread(target=_timeout_scheduler, daemon=True)

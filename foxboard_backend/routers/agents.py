@@ -23,6 +23,7 @@ def row_to_agent(row) -> Agent:
         current_project_id=row["current_project_id"],
         priority=row["priority"],
         last_heartbeat=row["last_heartbeat"],
+        state_detail=row.get("state_detail"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -58,12 +59,17 @@ def heartbeat(payload: AgentHeartbeat):
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail=f"Agent {payload.agent_id} not found")
+
+    # 获取 state_detail（可由 heartbeat 附带）
+    state_detail = getattr(payload, 'state_detail', None) or row.get("state_detail")
+
     cursor.execute("""
         UPDATE agents SET
             status = ?,
             current_task_id = ?,
             current_project_id = ?,
             priority = ?,
+            state_detail = COALESCE(?, state_detail),
             last_heartbeat = ?,
             updated_at = ?
         WHERE id = ?
@@ -72,6 +78,7 @@ def heartbeat(payload: AgentHeartbeat):
         payload.task_id,
         payload.project_id,
         payload.priority,
+        state_detail,
         now, now,
         payload.agent_id,
     ))
@@ -101,4 +108,30 @@ def get_agent(agent_id: str):
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Agent not found")
+    return row_to_agent(row)
+
+@router.patch("/{agent_id}/state-detail", response_model=Agent)
+def update_state_detail(agent_id: str, detail: str = None):
+    """
+    更新单个成员的 state_detail 字段。
+    各 agent 的 push 脚本调用此 API 主动上报工作详情。
+    """
+    if detail is None:
+        raise HTTPException(status_code=400, detail="detail is required")
+    conn = get_conn()
+    cursor = conn.cursor()
+    now = datetime.utcnow().isoformat()
+    cursor.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    cursor.execute(
+        "UPDATE agents SET state_detail = ?, updated_at = ? WHERE id = ?",
+        (detail, now, agent_id)
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
+    row = cursor.fetchone()
+    conn.close()
     return row_to_agent(row)
