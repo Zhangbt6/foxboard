@@ -5,6 +5,24 @@ All notable changes to **FoxBoard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-21
+
+### Added
+- **超时提醒机制** (TASK-FB-021): 后台定时扫描DOING任务
+  - `started_at` 字段记录任务开始时间
+  - 后台线程每5分钟扫描一次，超时（默认2小时）写入 `task_timeout` 事件
+  - Dashboard 超时告警横幅（红色）+ 指标卡
+- **REVIEW 自动派给黑狐** (TASK-FB-022): 任务进入 REVIEW 状态时自动触发 FoxComms 通知黑狐审核
+  - 状态变更钩子：PATCH `/tasks/{id}` 检测 `→REVIEW` 自动通知
+- **任务依赖自动激活** (TASK-FB-023): 任务 DONE 后检查下游依赖
+  - `depends_on` 字段（逗号分隔任务ID列表）
+  - 所有前置任务 DONE 时自动激活下游 BLOCKED→TODO
+  - 自动写入 `task_activated` 事件日志
+- **角色专属 Queue 视图** (TASK-FB-024): `/my-tasks` 页面
+  - 按成员/状态/优先级多维筛选
+  - 四列统计：TODO/DOING/REVIEW/DONE 计数
+  - 点击卡片推进任务状态
+
 ## [0.3.0] - 2026-03-20
 
 ### Added
