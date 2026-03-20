@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from foxboard_backend.database import init_db
-from foxboard_backend.routers import agents, tasks, events
+from foxboard_backend.routers import agents, tasks, events, workflows
 
 # 初始化数据库
 init_db()
@@ -30,6 +30,7 @@ app.add_middleware(
 app.include_router(agents.router)
 app.include_router(tasks.router)
 app.include_router(events.router)
+app.include_router(workflows.router)
 
 @app.get("/", tags=["health"])
 def root():

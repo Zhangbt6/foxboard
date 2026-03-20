@@ -66,6 +66,7 @@ def client(test_db, monkeypatch):
     monkeypatch.setattr("foxboard_backend.routers.agents.get_conn", _get_test_conn)
     monkeypatch.setattr("foxboard_backend.routers.tasks.get_conn",  _get_test_conn)
     monkeypatch.setattr("foxboard_backend.routers.events.get_conn", _get_test_conn)
+    monkeypatch.setattr("foxboard_backend.routers.workflows.get_conn", _get_test_conn)
 
     from fastapi.testclient import TestClient
     import foxboard_backend.app as app_module
@@ -74,9 +75,11 @@ def client(test_db, monkeypatch):
     import foxboard_backend.routers.agents as agents_mod
     import foxboard_backend.routers.tasks  as tasks_mod
     import foxboard_backend.routers.events as events_mod
+    import foxboard_backend.routers.workflows as workflows_mod
     importlib.reload(agents_mod)
     importlib.reload(tasks_mod)
     importlib.reload(events_mod)
+    importlib.reload(workflows_mod)
 
     with TestClient(app_module.app) as c:
         yield c

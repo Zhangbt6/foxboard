@@ -83,6 +83,31 @@ def init_db():
         )
     """)
 
+    # workflows 表（流程图实例）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS workflows (
+            id TEXT PRIMARY KEY,
+            project_id TEXT,
+            name TEXT NOT NULL DEFAULT '默认流程',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # workflow_node_states 表（流程图节点状态）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_node_states (
+            workflow_id TEXT NOT NULL,
+            node_id TEXT NOT NULL,
+            task_id TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (workflow_id, node_id),
+            FOREIGN KEY (workflow_id) REFERENCES workflows(id)
+        )
+    """)
+
     conn.commit()
     conn.close()
     print(f"[DB] 数据库初始化完成: {DB_PATH}")

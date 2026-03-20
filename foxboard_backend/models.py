@@ -134,3 +134,52 @@ class Event(BaseModel):
     message: Optional[str]
     metadata: Optional[str]
     created_at: str
+
+# ---- Workflow ----
+class WorkflowCreate(BaseModel):
+    id: str
+    project_id: Optional[str] = None
+    name: str = "默认流程"
+
+class Workflow(BaseModel):
+    id: str
+    project_id: Optional[str]
+    name: str
+    created_at: str
+    updated_at: str
+
+# ---- Workflow Node State ----
+class NodeStatus(str, Enum):
+    """节点状态：决定颜色"""
+    pending = "pending"      # 灰 #94a3b8 未开始
+    running = "running"       # 蓝 #3b82f6 进行中
+    done = "done"            # 绿 #22c55e 完成
+    review = "review"        # 黄 #eab308 审核中
+    blocked = "blocked"      # 红 #ef4444 阻塞
+
+# 状态→颜色映射（供前端直接使用）
+NODE_STATUS_COLORS = {
+    NodeStatus.pending: "#94a3b8",
+    NodeStatus.running: "#3b82f6",
+    NodeStatus.done: "#22c55e",
+    NodeStatus.review: "#eab308",
+    NodeStatus.blocked: "#ef4444",
+}
+
+class WorkflowNodeStateCreate(BaseModel):
+    node_id: str
+    task_id: Optional[str] = None
+    status: NodeStatus = NodeStatus.pending
+
+class WorkflowNodeStateUpdate(BaseModel):
+    status: Optional[NodeStatus] = None
+    task_id: Optional[str] = None
+
+class WorkflowNodeState(BaseModel):
+    workflow_id: str
+    node_id: str
+    task_id: Optional[str]
+    status: NodeStatus
+    color: str  # 派生自 status
+    created_at: str
+    updated_at: str
