@@ -8,6 +8,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.3.0] - 2026-03-20
 
 ### Added
+- **流程图节点状态同步后端** (TASK-FB-016): 新增 workflows + workflow_node_states 表及 API
+  - `workflows` 表：工作流定义（name, project_id, status）
+  - `workflow_node_states` 表：节点实时状态（node_id, task_id, color, updated_at）
+  - GET/POST `/workflows/`、GET/PATCH `/workflows/{id}/nodes` 接口
+  - 节点状态关联 task，task 状态变化自动更新节点颜色
+  - 新增 15 个 pytest 测试用例（test_workflows.py）
+- **Activity 事件流页面** (TASK-FB-018): 新增 `/activity` 页面
+  - 实时展示系统事件流（任务创建/完成/Agent心跳/注册）
+  - 按类型筛选 + 时间线展示，负责人着色
 - **React Flow 流程图** (TASK-FB-015): 新增 `/workflow` 页面
   - 7步标准流程图（需求提出→花火拆解→白狐调研→青狐开发→黑狐验证→花火汇总→主人审核）
   - React Flow 渲染，支持拖拽/缩放/Controls/MiniMap
