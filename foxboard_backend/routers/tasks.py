@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import sqlite3
 import sys
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
@@ -34,8 +35,8 @@ def row_to_task(row) -> Task:
         assignee_id=row["assignee_id"],
         project_id=row["project_id"],
         tags=row["tags"],
-        started_at=row.get("started_at"),
-        depends_on=row.get("depends_on"),
+        started_at=row["started_at"] if "started_at" in row else None,
+        depends_on=row["depends_on"] if "depends_on" in row else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         completed_at=row["completed_at"],
@@ -209,15 +210,19 @@ def create_task(payload: TaskCreate):
     cursor = conn.cursor()
     now = datetime.utcnow().isoformat()
     task_status = payload.status.value if payload.status else "TODO"
-    cursor.execute("""
-        INSERT INTO tasks (id, title, description, status, priority, assignee_id, project_id, tags, depends_on, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        payload.id, payload.title, payload.description, task_status,
-        payload.priority, payload.assignee_id, payload.project_id,
-        payload.tags, payload.depends_on, now, now
-    ))
-    conn.commit()
+    try:
+        cursor.execute("""
+            INSERT INTO tasks (id, title, description, status, priority, assignee_id, project_id, tags, depends_on, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            payload.id, payload.title, payload.description, task_status,
+            payload.priority, payload.assignee_id, payload.project_id,
+            payload.tags, payload.depends_on, now, now
+        ))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Task with id '{payload.id}' already exists")
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (payload.id,))
     row = cursor.fetchone()
     conn.close()

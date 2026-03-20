@@ -115,15 +115,19 @@ def init_db():
     print(f"[DB] 数据库初始化完成: {DB_PATH}")
 
 def migrate_add_columns():
-    """增量迁移：为已有表添加新字段（幂等）"""
+    """
+    增量迁移：为已有表添加新字段（幂等）。
+    注意：started_at / depends_on 已内嵌在 CREATE TABLE (v0.4+），
+    此处仅作旧数据库兼容保留，不再处理这两个字段。
+    """
     conn = get_conn()
     cursor = conn.cursor()
-    for col_def in [
-        "ADD COLUMN started_at TEXT",
-        "ADD COLUMN depends_on TEXT",
-    ]:
-        col_name = col_def.split()[-1]
-        cursor.execute(f"PRAGMA table_info(tasks)")
+    # 以下字段如在未来版本需迁移，在此追加
+    extra_cols = [
+        # ("ADD COLUMN xxx TEXT", "xxx"),
+    ]
+    for col_def, col_name in extra_cols:
+        cursor.execute("PRAGMA table_info(tasks)")
         cols = [row[1] for row in cursor.fetchall()]
         if col_name not in cols:
             cursor.execute(f"ALTER TABLE tasks {col_def}")
