@@ -1,10 +1,12 @@
-import { LayoutDashboard, Kanban, Users } from 'lucide-react';
+import { LayoutDashboard, Kanban, Users, GitBranch, Activity } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/kanban', icon: Kanban, label: '看板' },
   { to: '/agents', icon: Users, label: '成员状态' },
+  { to: '/workflow', icon: GitBranch, label: '流程图' },
+  { to: '/activity', icon: Activity, label: '事件流' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -68,7 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           fontSize: 11,
           color: '#475569',
         }}>
-          v0.1.0 · Phase 1
+          v0.3.0 · Phase 3
         </div>
       </nav>
 
