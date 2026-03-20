@@ -49,4 +49,14 @@ export const createEvent = (event: {
   message?: string;
 }) => api.post('/events/', event);
 
+// ---- Workflows ----
+export const getWorkflows = (params?: { project_id?: string }) =>
+  api.get('/workflows/', { params });
+
+export const getWorkflowNodes = (workflowId: number) =>
+  api.get(`/workflows/${workflowId}/nodes`);
+
+export const updateWorkflowNode = (workflowId: number, nodeId: string, updates: { status?: string; task_id?: string }) =>
+  api.patch(`/workflows/${workflowId}/nodes/${nodeId}`, updates);
+
 export default api;
