@@ -10,38 +10,28 @@ from datetime import datetime
 
 from ..database import get_conn
 from ..models import EventCreate, Event
+from ..event_bus import event_bus
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 @router.post("/", response_model=Event)
 def create_event(payload: EventCreate):
-    """写入事件日志"""
-    conn = get_conn()
-    cursor = conn.cursor()
-    now = datetime.utcnow().isoformat()
-    cursor.execute("""
-        INSERT INTO task_logs (task_id, agent_id, event_type, message, metadata, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        payload.task_id,
-        payload.agent_id,
-        payload.event_type.value,
-        payload.message,
-        payload.metadata,
-        now,
-    ))
-    conn.commit()
-    cursor.execute("SELECT * FROM task_logs WHERE id = last_insert_rowid()")
-    row = cursor.fetchone()
-    conn.close()
+    """写入事件日志（通过 EventBus 统一分发）"""
+    # 通过 EventBus 发送事件（自动写 DB + WebSocket 广播）
+    result = event_bus.emit(
+        event_type=payload.event_type.value,
+        task_id=payload.task_id,
+        actor_id=payload.agent_id,
+        payload={"message": payload.message, "metadata": payload.metadata},
+    )
     return Event(
-        id=row["id"],
-        task_id=row["task_id"],
-        agent_id=row["agent_id"],
-        event_type=row["event_type"],
-        message=row["message"],
-        metadata=row["metadata"],
-        created_at=row["created_at"],
+        id=result["_db_id"],
+        task_id=payload.task_id,
+        agent_id=payload.agent_id,
+        event_type=payload.event_type,
+        message=payload.message,
+        metadata=payload.metadata,
+        created_at=result["timestamp"],
     )
 
 @router.get("/", response_model=List[Event])

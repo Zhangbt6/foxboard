@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..database import get_conn
 from ..models import ProjectCreate, Project, ProjectStatus
+from ..event_bus import EventBus, EventType
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -59,7 +60,7 @@ def get_project(project_id: str):
 
 @router.post("/", response_model=Project, status_code=201)
 def create_project(payload: ProjectCreate):
-    """创建项目"""
+    """创建项目（数据库记录 + 项目目录模板初始化）"""
     conn = get_conn()
     cursor = conn.cursor()
     now = datetime.utcnow().isoformat()
@@ -83,6 +84,33 @@ def create_project(payload: ProjectCreate):
     cursor.execute("SELECT * FROM projects WHERE id = ?", (payload.id,))
     row = cursor.fetchone()
     conn.close()
+
+    # 初始化项目目录模板（幂等，不覆盖已有文件）
+    from ..project_template import init_project_template
+    from ..event_bus import EventBus
+    template_result = init_project_template(
+        project_name=payload.name,
+        description=payload.description,
+        owner=payload.owner,
+        status=ProjectStatus.active.value,
+    )
+    print(f"[projects] 项目目录初始化: {template_result}")
+
+    # 发出 project_created 事件
+    event_bus = EventBus()
+    event_bus.emit(
+        event_type=EventType.PROJECT_CREATED,
+        project_id=payload.id,
+        actor_id=payload.owner,
+        payload={
+            "message": f"项目 '{payload.name}' 已创建",
+            "project_name": payload.name,
+            "project_dir": template_result["project_dir"],
+            "created_files": template_result["created_files"],
+            "skipped_files": template_result["skipped_files"],
+        },
+    )
+
     return row_to_project(row)
 
 

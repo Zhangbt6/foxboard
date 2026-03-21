@@ -76,3 +76,25 @@ export const updateProject = (id: string, data: Record<string, unknown>) =>
   api.patch(`/projects/${id}`, data);
 
 export const deleteProject = (id: string) => api.delete(`/projects/${id}`);
+
+// ---- Task Operations (Phase 7) ----
+export const getTask = (task_id: string) =>
+  api.get(`/tasks/${task_id}`);
+
+export const getTaskDetails = (task_id: string) =>
+  api.get(`/tasks/${task_id}`, { params: { with_context: true } });
+
+export const claimTask = (task_id: string, payload: { assignee_id: string }) =>
+  api.post(`/tasks/${task_id}/claim`, payload);
+
+export const submitTask = (task_id: string, payload: { status: string; note?: string }) =>
+  api.post(`/tasks/${task_id}/submit`, payload);
+
+export const reviewTask = (task_id: string, payload: { result: 'pass'; note?: string }) =>
+  api.post(`/tasks/${task_id}/review`, payload);
+
+export const rejectTask = (task_id: string, payload: { reason: string }) =>
+  api.post(`/tasks/${task_id}/reject`, payload);
+
+export const getTaskLogs = (task_id: string, limit = 10) =>
+  api.get('/events/', { params: { task_id, limit } });

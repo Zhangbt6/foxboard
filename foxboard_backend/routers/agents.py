@@ -12,6 +12,7 @@ from datetime import datetime
 
 from ..database import get_conn
 from ..models import AgentRegister, AgentHeartbeat, Agent, AgentStatus
+from ..event_bus import event_bus
 
 
 def _run_async_broadcast(coro):
@@ -60,8 +61,16 @@ def register_agent(payload: AgentRegister):
     conn.commit()
     cursor.execute("SELECT * FROM agents WHERE id = ?", (payload.agent_id,))
     row = cursor.fetchone()
+    agent = row_to_agent(row)
     conn.close()
-    return row_to_agent(row)
+
+    # 通过 EventBus 记录注册事件
+    event_bus.agent_registered(
+        agent_id=payload.agent_id,
+        agent_data=agent.model_dump(),
+    )
+
+    return agent
 
 @router.post("/heartbeat", response_model=Agent)
 def heartbeat(payload: AgentHeartbeat):
@@ -102,16 +111,12 @@ def heartbeat(payload: AgentHeartbeat):
     row = cursor.fetchone()
     conn.close()
 
-    # WebSocket 广播 agent 心跳
-    try:
-        from ..websocket_manager import ws_manager
-        _run_async_broadcast(ws_manager.broadcast_agent_heartbeat(
-            agent_id=payload.agent_id,
-            status=payload.status.value,
-            extra={"task_id": payload.task_id, "project_id": payload.project_id}
-        ))
-    except Exception:
-        pass  # WebSocket 广播失败不影响主流程
+    # 通过 EventBus 记录心跳事件
+    event_bus.agent_heartbeat(
+        agent_id=payload.agent_id,
+        status=payload.status.value,
+        extra={"task_id": payload.task_id, "project_id": payload.project_id},
+    )
 
     return row_to_agent(row)
 

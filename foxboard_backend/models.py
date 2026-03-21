@@ -188,3 +188,52 @@ class WorkflowNodeState(BaseModel):
     color: str  # 派生自 status
     created_at: str
     updated_at: str
+
+# ---- Task Lifecycle Request/Response ----
+class TaskClaimRequest(BaseModel):
+    agent_id: str = Field(..., description="领取任务的 Agent ID")
+
+class TaskSubmitRequest(BaseModel):
+    agent_id: str = Field(..., description="提交任务的 Agent ID")
+    message: Optional[str] = Field(None, description="提交附言（可选）")
+
+class TaskReviewRequest(BaseModel):
+    auditor_id: str = Field(..., description="审核人 ID（黑狐）")
+
+class TaskRejectRequest(BaseModel):
+    auditor_id: str = Field(..., description="审核人 ID（黑狐）")
+    reason: str = Field(..., description="打回原因")
+
+class TaskBulkCreateRequest(BaseModel):
+    tasks: List[TaskCreate] = Field(..., description="批量创建的任务列表")
+
+class TaskContextItem(BaseModel):
+    """单个上下文项（用于 depends_on_tasks 和 recent_activity）"""
+    id: Optional[str] = None
+    title: Optional[str] = None
+    status: Optional[str] = None
+    agent_id: Optional[str] = None
+    event_type: Optional[str] = None
+    message: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class TaskContext(BaseModel):
+    """任务上下文（claim/submit 响应中附带）"""
+    project_summary: str = Field(default="", description="项目简介摘要")
+    task_description: str = Field(default="", description="任务完整描述")
+    recommended_docs: List[str] = Field(default_factory=list, description="推荐文档路径/URL列表")
+    depends_on_tasks: List[TaskContextItem] = Field(default_factory=list, description="依赖任务及状态")
+    recent_activity: List[TaskContextItem] = Field(default_factory=list, description="最近活动记录")
+
+
+class TaskOperationResponse(BaseModel):
+    ok: bool
+    task: Task
+    message: Optional[str] = None
+    context: Optional[TaskContext] = Field(None, description="任务上下文（claim 时自动打包）")
+
+class TaskBulkResponse(BaseModel):
+    ok: bool
+    created: List[Task]
+    failed: List[dict] = Field(default_factory=list, description="创建失败的任务及错误原因")
