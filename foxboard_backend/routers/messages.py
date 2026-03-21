@@ -18,6 +18,10 @@ from ..models import MessageSend, Message, MessagePriority
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
+# 环境检测：TESTING=1 或 PYTEST_CURRENT_TEST 存在时禁用推送
+def _is_test_env() -> bool:
+    return bool(os.environ.get("TESTING") or os.environ.get("PYTEST_CURRENT_TEST"))
+
 # OpenClaw CLI 路径
 OPENCLAW_BIN = os.environ.get("OPENCLAW_BIN", "/home/muyin/.npm-global/bin/openclaw")
 # 飞书群 ID
@@ -58,7 +62,9 @@ def _row_to_message(r) -> Message:
 
 def _notify_feishu(from_agent: str, to_agent: str, body: str,
                    subject: str = None, ref_task_id: str = None):
-    """异步推送飞书通知"""
+    """异步推送飞书通知（测试环境下跳过）"""
+    if _is_test_env():
+        return
     def _do():
         try:
             from_name = AGENT_NAMES.get(from_agent, from_agent)
@@ -74,22 +80,30 @@ def _notify_feishu(from_agent: str, to_agent: str, body: str,
             if len(text) > 500:
                 text = text[:497] + "..."
 
-            subprocess.run(
-                [OPENCLAW_BIN, "message", "send",
-                 "--channel", "feishu",
-                 "-t", FEISHU_GROUP_ID,
-                 "-m", text],
-                capture_output=True, timeout=15,
-            )
+            cmd = [OPENCLAW_BIN, "message", "send",
+                   "--channel", "feishu",
+                   "-t", FEISHU_GROUP_ID,
+                   "-m", text]
+            # 用发送者的 agent 账号发飞书（这样飞书端显示对应机器人）
+            if from_agent in AGENT_CRON_MAP:
+                cmd.extend(["--account", from_agent])
+
+            result = subprocess.run(cmd, capture_output=True, timeout=15, text=True)
+            if result.returncode != 0:
+                print(f"[Messages] 飞书通知失败(rc={result.returncode}): {result.stderr[:200]}")
+            else:
+                print(f"[Messages] 飞书通知已发送: {from_name}→{to_name}")
         except Exception as e:
-            print(f"[Messages] 飞书通知失败: {e}")
+            print(f"[Messages] 飞书通知异常: {e}")
 
     t = threading.Thread(target=_do, daemon=True)
     t.start()
 
 
 def _trigger_cron(to_agent: str):
-    """异步触发对方 cron job（如果有映射）"""
+    """异步触发对方 cron job（测试环境下跳过）"""
+    if _is_test_env():
+        return
     job_id = AGENT_CRON_MAP.get(to_agent)
     if not job_id:
         return
