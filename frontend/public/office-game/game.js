@@ -298,7 +298,7 @@ function preload() {
     hideLoadingOverlay();
   });
 
-  this.load.image('office_bg', '/static/office_bg_small' + (supportsWebP ? '.webp' : '.png') + '?v=20260321');
+  this.load.image('office_bg', '/static/office_bg_small' + (supportsWebP ? '.webp' : '.png') + '?v={{VERSION_TIMESTAMP}}');
   this.load.spritesheet('star_idle', '/static/star-idle-spritesheet' + getExt('star-idle-spritesheet.png'), { frameWidth: 128, frameHeight: 128 });
   this.load.spritesheet('star_researching', '/static/star-researching-spritesheet' + getExt('star-researching-spritesheet.png'), { frameWidth: 128, frameHeight: 105 });
 
@@ -316,12 +316,6 @@ function preload() {
   this.load.spritesheet('star_working', '/static/star-working-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 230, frameHeight: 144 });
   this.load.spritesheet('sync_anim', '/static/sync-animation-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 256, frameHeight: 256 });
   this.load.image('memo_bg', '/static/memo-bg' + (supportsWebP ? '.webp' : '.png'));
-
-  // 花火专属像素动画（主人提供，64x64 x 4帧）
-  this.load.spritesheet('spark_idle', '/sprites/spark_idle.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('spark_wave', '/sprites/spark_wave.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('spark_wiggle', '/sprites/spark_wiggle.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('spark_think', '/sprites/spark_think.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
 
   // 新办公桌：强制 PNG（透明）
   this.load.image('desk_v2', '/static/desk-v2.png');
@@ -359,32 +353,6 @@ function create() {
     key: 'star_researching',
     frames: this.anims.generateFrameNumbers('star_researching', { start: 0, end: 95 }),
     frameRate: 12,
-    repeat: -1
-  });
-
-  // 花火像素小人：先接 idle / wave / wiggle / think 四套动画
-  this.anims.create({
-    key: 'spark_idle_anim',
-    frames: this.anims.generateFrameNumbers('spark_idle', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'spark_wave_anim',
-    frames: this.anims.generateFrameNumbers('spark_wave', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'spark_wiggle_anim',
-    frames: this.anims.generateFrameNumbers('spark_wiggle', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'spark_think_anim',
-    frames: this.anims.generateFrameNumbers('spark_think', { start: 0, end: 3 }),
-    frameRate: 8,
     repeat: -1
   });
 
@@ -979,26 +947,6 @@ function getAreaPosition(area, slotIndex) {
   return positions[idx];
 }
 
-function getAgentVisualSpec(agent) {
-  const name = String(agent.name || '');
-  const isHibana = !!agent.isMain || name.includes('花火');
-  if (!isHibana) return null;
-
-  const state = agent.state || 'idle';
-  let animKey = 'spark_idle_anim';
-  if (state === 'researching') animKey = 'spark_think_anim';
-  else if (state === 'executing' || state === 'syncing' || state === 'error') animKey = 'spark_wiggle_anim';
-  else if (state === 'writing') animKey = 'spark_wave_anim';
-
-  return {
-    type: 'sprite',
-    texture: animKey.replace('_anim', ''),
-    animKey,
-    scale: 0.95,
-    y: 4,
-  };
-}
-
 function renderAgent(agent) {
   const agentId = agent.agentId;
   const name = agent.name || 'Agent';
@@ -1012,8 +960,8 @@ function renderAgent(agent) {
   const baseY = pos.y;
 
   // 颜色
+  const bodyColor = AGENT_COLORS[agentId] || AGENT_COLORS.default;
   const nameColor = NAME_TAG_COLORS[authStatus] || NAME_TAG_COLORS.default;
-  const visualSpec = getAgentVisualSpec(agent);
 
   // 透明度（离线/待批准/拒绝时变半透明）
   let alpha = 1;
@@ -1026,25 +974,15 @@ function renderAgent(agent) {
     const container = game.add.container(baseX, baseY);
     container.setDepth(1200 + (isMain ? 100 : 0)); // 放到最顶层！
 
-    let agentVisual;
-    if (visualSpec && visualSpec.type === 'sprite' && game.textures.exists(visualSpec.texture)) {
-      agentVisual = game.add.sprite(0, visualSpec.y || 0, visualSpec.texture).setOrigin(0.5);
-      agentVisual.setScale(visualSpec.scale || 1);
-      if (visualSpec.animKey) {
-        agentVisual.anims.play(visualSpec.animKey, true);
-        agentVisual.setData('animKey', visualSpec.animKey);
-      }
-      agentVisual.name = 'agentVisual';
-    } else {
-      agentVisual = game.add.text(0, 0, '⭐', {
-        fontFamily: 'ArkPixel, monospace',
-        fontSize: '32px'
-      }).setOrigin(0.5);
-      agentVisual.name = 'agentVisual';
-    }
+    // 像素小人：用星星图标，更明显
+    const starIcon = game.add.text(0, 0, '⭐', {
+      fontFamily: 'ArkPixel, monospace',
+      fontSize: '32px'
+    }).setOrigin(0.5);
+    starIcon.name = 'starIcon';
 
     // 名字标签（漂浮）
-    const nameTag = game.add.text(0, -42, name, {
+    const nameTag = game.add.text(0, -36, name, {
       fontFamily: 'ArkPixel, monospace',
       fontSize: '14px',
       fill: '#' + nameColor.toString(16).padStart(6, '0'),
@@ -1060,11 +998,11 @@ function renderAgent(agent) {
     if (authStatus === 'pending') dotColor = 0xf59e0b;
     if (authStatus === 'rejected') dotColor = 0xef4444;
     if (authStatus === 'offline') dotColor = 0x94a3b8;
-    const statusDot = game.add.circle(24, -24, 5, dotColor, alpha);
+    const statusDot = game.add.circle(20, -20, 5, dotColor, alpha);
     statusDot.setStrokeStyle(2, 0x000000, alpha);
     statusDot.name = 'statusDot';
 
-    container.add([agentVisual, statusDot, nameTag]);
+    container.add([starIcon, statusDot, nameTag]);
     agents[agentId] = container;
   } else {
     // 更新 agent
@@ -1072,16 +1010,6 @@ function renderAgent(agent) {
     container.setPosition(baseX, baseY);
     container.setAlpha(alpha);
     container.setDepth(1200 + (isMain ? 100 : 0));
-
-    // 更新主视觉（花火用 spritesheet，其它继续占位）
-    const agentVisual = container.getAt(0);
-    if (agentVisual && agentVisual.name === 'agentVisual' && visualSpec && visualSpec.animKey && agentVisual.anims) {
-      const currentAnimKey = agentVisual.getData ? agentVisual.getData('animKey') : null;
-      if (currentAnimKey !== visualSpec.animKey) {
-        agentVisual.anims.play(visualSpec.animKey, true);
-        if (agentVisual.setData) agentVisual.setData('animKey', visualSpec.animKey);
-      }
-    }
 
     // 更新名字和颜色（如果变化）
     const nameTag = container.getAt(2);

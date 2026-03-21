@@ -4,12 +4,27 @@
 """
 from __future__ import annotations
 
+import asyncio
+import threading
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 
 from ..database import get_conn
 from ..models import AgentRegister, AgentHeartbeat, Agent, AgentStatus
+
+
+def _run_async_broadcast(coro):
+    """在独立线程的新事件循环中运行异步协程（解决 sync handler 事件循环问题）"""
+    def _thread_target():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(coro)
+        finally:
+            loop.close()
+    t = threading.Thread(target=_thread_target, daemon=True)
+    t.start()
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -23,7 +38,7 @@ def row_to_agent(row) -> Agent:
         current_project_id=row["current_project_id"],
         priority=row["priority"],
         last_heartbeat=row["last_heartbeat"],
-        state_detail=row.get("state_detail"),
+        state_detail=row["state_detail"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -61,7 +76,7 @@ def heartbeat(payload: AgentHeartbeat):
         raise HTTPException(status_code=404, detail=f"Agent {payload.agent_id} not found")
 
     # 获取 state_detail（可由 heartbeat 附带）
-    state_detail = getattr(payload, 'state_detail', None) or row.get("state_detail")
+    state_detail = getattr(payload, 'state_detail', None) or row["state_detail"]
 
     cursor.execute("""
         UPDATE agents SET
@@ -86,6 +101,18 @@ def heartbeat(payload: AgentHeartbeat):
     cursor.execute("SELECT * FROM agents WHERE id = ?", (payload.agent_id,))
     row = cursor.fetchone()
     conn.close()
+
+    # WebSocket 广播 agent 心跳
+    try:
+        from ..websocket_manager import ws_manager
+        _run_async_broadcast(ws_manager.broadcast_agent_heartbeat(
+            agent_id=payload.agent_id,
+            status=payload.status.value,
+            extra={"task_id": payload.task_id, "project_id": payload.project_id}
+        ))
+    except Exception:
+        pass  # WebSocket 广播失败不影响主流程
+
     return row_to_agent(row)
 
 @router.get("/", response_model=List[Agent])

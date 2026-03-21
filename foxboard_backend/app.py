@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from foxboard_backend.database import init_db, migrate_add_columns, migrate_add_state_detail
-from foxboard_backend.routers import agents, tasks, events, workflows
+from foxboard_backend.routers import agents, tasks, events, workflows, projects, websocket
 
 TIMEOUT_INTERVAL = int(os.environ.get("TASK_TIMEOUT_INTERVAL_SECONDS", "300"))  # 默认5分钟检测一次
 
@@ -68,6 +68,8 @@ app.include_router(agents.router)
 app.include_router(tasks.router)
 app.include_router(events.router)
 app.include_router(workflows.router)
+app.include_router(projects.router)
+app.include_router(websocket.router)
 
 @app.get("/", tags=["health"])
 def root():

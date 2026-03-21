@@ -4,8 +4,10 @@
 """
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import sys
+import threading
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timezone, timedelta
@@ -17,6 +19,22 @@ from ..models import (
 )
 
 # 添加 scripts 路径，以便导入 FoxComms
+
+
+def _run_async_broadcast(coro):
+    """
+    在独立线程的新事件循环中运行异步协程。
+    解决 sync route handler 中 asyncio.get_event_loop() 返回未运行 loop 的问题。
+    """
+    def _thread_target():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(coro)
+        finally:
+            loop.close()
+    t = threading.Thread(target=_thread_target, daemon=True)
+    t.start()
 sys.path.insert(0, "/home/muyin/.openclaw/workspace/scripts")
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -225,8 +243,21 @@ def create_task(payload: TaskCreate):
         raise HTTPException(status_code=400, detail=f"Task with id '{payload.id}' already exists")
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (payload.id,))
     row = cursor.fetchone()
+    task = row_to_task(row)
     conn.close()
-    return row_to_task(row)
+
+    # WebSocket 广播任务创建
+    try:
+        from ..websocket_manager import ws_manager
+        _run_async_broadcast(ws_manager.broadcast_task_update(
+            task_id=payload.id,
+            action="created",
+            task_data=task.model_dump()
+        ))
+    except Exception:
+        pass
+
+    return task
 
 
 @router.get("/{task_id}", response_model=Task)
@@ -294,8 +325,21 @@ def update_task(task_id: str, payload: TaskUpdate):
 
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
     updated_row = cursor.fetchone()
+    task = row_to_task(updated_row)
     conn.close()
-    return row_to_task(updated_row)
+
+    # WebSocket 广播任务更新
+    try:
+        from ..websocket_manager import ws_manager
+        _run_async_broadcast(ws_manager.broadcast_task_update(
+            task_id=task_id,
+            action="updated",
+            task_data=task.model_dump()
+        ))
+    except Exception:
+        pass
+
+    return task
 
 
 @router.delete("/{task_id}")
@@ -309,6 +353,18 @@ def delete_task(task_id: str):
     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
+
+    # WebSocket 广播任务删除
+    try:
+        from ..websocket_manager import ws_manager
+        _run_async_broadcast(ws_manager.broadcast_task_update(
+            task_id=task_id,
+            action="deleted",
+            task_data={"id": task_id}
+        ))
+    except Exception:
+        pass
+
     return {"ok": True, "deleted": task_id}
 
 

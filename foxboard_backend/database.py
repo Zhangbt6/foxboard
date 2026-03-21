@@ -130,21 +130,23 @@ def migrate_add_state_detail():
 def migrate_add_columns():
     """
     增量迁移：为已有表添加新字段（幂等）。
-    注意：started_at / depends_on 已内嵌在 CREATE TABLE (v0.4+），
-    此处仅作旧数据库兼容保留，不再处理这两个字段。
     """
     conn = get_conn()
     cursor = conn.cursor()
-    # 以下字段如在未来版本需迁移，在此追加
+    # tasks 表 v0.4+ 新增字段
     extra_cols = [
-        # ("ADD COLUMN xxx TEXT", "xxx"),
+        ("ALTER TABLE tasks ADD COLUMN started_at TEXT", "started_at"),
+        ("ALTER TABLE tasks ADD COLUMN depends_on TEXT", "depends_on"),
     ]
+    cursor.execute("PRAGMA table_info(tasks)")
+    existing_cols = [row[1] for row in cursor.fetchall()]
     for col_def, col_name in extra_cols:
-        cursor.execute("PRAGMA table_info(tasks)")
-        cols = [row[1] for row in cursor.fetchall()]
-        if col_name not in cols:
-            cursor.execute(f"ALTER TABLE tasks {col_def}")
-            print(f"[DB] 迁移：tasks 表新增 {col_name} 字段")
+        if col_name not in existing_cols:
+            try:
+                cursor.execute(col_def)
+                print(f"[DB] 迁移：tasks 表新增 {col_name} 字段")
+            except Exception as e:
+                print(f"[DB] 迁移跳过 {col_name}: {e}")
     conn.commit()
     conn.close()
 
