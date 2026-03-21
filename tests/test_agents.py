@@ -22,7 +22,7 @@ class TestAgentRegister:
         assert data["status"] == "idle"
 
     def test_register_duplicate_id_updates(self, client: TestClient):
-        """重复注册同一 ID 应更新已有记录（upsert）"""
+        """重复注册同一 ID 不应覆盖 name/role（防止心跳污染）"""
         client.post("/agents/register", json={
             "agent_id": "fox_002",
             "name": "青狐",
@@ -35,8 +35,9 @@ class TestAgentRegister:
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["name"] == "青狐（更新后）"
-        assert data["role"] == "commander"
+        # 已存在的 agent，name/role 保持首次注册值不变
+        assert data["name"] == "青狐"
+        assert data["role"] == "worker"
 
     def test_register_missing_fields(self, client: TestClient):
         """缺少必填字段应返回 422"""

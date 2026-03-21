@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getAgents, getTasks } from '../api/client';
-import { updateTask } from '../api/client';
 import { useInterval } from '../hooks/useInterval';
 
 interface Task {
@@ -11,7 +10,6 @@ interface Task {
   priority: number;
   assignee_id?: string;
   tags?: string;
-  started_at?: string;
   created_at: string;
 }
 
@@ -30,25 +28,11 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string }> 
   BLOCKED: { label: '🚫 阻塞',    color: '#ef4444', bg: '#3f0000' },
 };
 
-const NEXT_STATUS: Record<string, string> = {
-  TODO: 'DOING',
-  DOING: 'REVIEW',
-  REVIEW: 'DONE',
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  worker: '🦊 青狐',
-  commander: '🎯 花火',
-  auditor: '🔍 黑狐',
-  researcher: '📖 白狐',
-};
-
 export default function MyTasks() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
@@ -64,17 +48,8 @@ export default function MyTasks() {
   const filteredTasks = tasks.filter(t => {
     if (selectedAgent && t.assignee_id !== selectedAgent) return false;
     if (statusFilter && t.status !== statusFilter) return false;
-    if (priorityFilter === 'high' && t.priority < 8) return false;
-    if (priorityFilter === 'medium' && (t.priority < 5 || t.priority >= 8)) return false;
     return true;
   });
-
-  const advanceTask = async (task: Task) => {
-    const next = NEXT_STATUS[task.status];
-    if (!next) return;
-    await updateTask(task.id, { status: next });
-    load();
-  };
 
   const grouped = Object.entries(STATUS_META).reduce((acc, [status]) => {
     acc[status] = filteredTasks.filter(t => t.status === status);
@@ -84,9 +59,13 @@ export default function MyTasks() {
   return (
     <div style={{ padding: 32 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>我的任务</h1>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>我的任务</h1>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
+            安全只读视图。自动推进状态已禁用；后续将并入主看板。
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          {/* 角色筛选 */}
           <select
             value={selectedAgent}
             onChange={e => setSelectedAgent(e.target.value)}
@@ -94,10 +73,9 @@ export default function MyTasks() {
           >
             <option value="">全部成员</option>
             {agents.map(a => (
-              <option key={a.id} value={a.id}>{ROLE_LABELS[a.role] || a.name} ({a.id})</option>
+              <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
             ))}
           </select>
-          {/* 状态筛选 */}
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
@@ -108,22 +86,11 @@ export default function MyTasks() {
               <option key={s} value={s}>{m.label}</option>
             ))}
           </select>
-          {/* 优先级筛选 */}
-          <select
-            value={priorityFilter}
-            onChange={e => setPriorityFilter(e.target.value)}
-            style={{ background: 'var(--foxboard-surface)', color: '#e2e8f0', border: '1px solid var(--foxboard-border)', borderRadius: 8, padding: '6px 12px', fontSize: 13 }}
-          >
-            <option value="">全部优先级</option>
-            <option value="high">🔥 P8+ 高优</option>
-            <option value="medium">📌 P5-7 中优</option>
-          </select>
         </div>
       </div>
 
       {loading && <div style={{ color: '#94a3b8' }}>加载中...</div>}
 
-      {/* 统计栏 */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
         {Object.entries(STATUS_META).map(([status, meta]) => (
           <div key={status} style={{
@@ -144,7 +111,6 @@ export default function MyTasks() {
         ))}
       </div>
 
-      {/* 任务列表 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
         {Object.entries(STATUS_META).map(([status, meta]) => (
           <div key={status}>
@@ -158,11 +124,7 @@ export default function MyTasks() {
                   border: `1px solid ${meta.color}44`,
                   borderRadius: 10,
                   padding: '12px 14px',
-                  cursor: NEXT_STATUS[task.status] ? 'pointer' : 'default',
-                  transition: 'border-color 0.15s',
-                }}
-                  onClick={() => advanceTask(task)}
-                >
+                }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <span style={{
                       fontSize: 10,
@@ -183,11 +145,9 @@ export default function MyTasks() {
                       ))}
                     </div>
                   )}
-                  {NEXT_STATUS[task.status] && (
-                    <div style={{ marginTop: 8, fontSize: 10, color: meta.color, textAlign: 'right' }}>
-                      → {STATUS_META[NEXT_STATUS[task.status]]?.label}
-                    </div>
-                  )}
+                  <div style={{ marginTop: 8, fontSize: 10, color: '#64748b', textAlign: 'right' }}>
+                    已禁用点击自动推进
+                  </div>
                 </div>
               ))}
               {grouped[status]?.length === 0 && (

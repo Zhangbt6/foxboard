@@ -12,9 +12,9 @@ const EVENT_TYPE_META: Record<string, { emoji: string; color: string; label: str
 
 // Agent meta for display
 const AGENT_META: Record<string, { emoji: string; color: string; name: string }> = {
-  fox_001:    { emoji: '🦊', color: '#7c3aed', name: '青狐' },
-  white_fox:  { emoji: '🦊', color: '#e2e8f0', name: '白狐' },
-  black_fox:  { emoji: '🦊', color: '#1e293b', name: '黑狐' },
+  qing_fox:   { emoji: '🦊', color: '#7c3aed', name: '小青' },
+  white_fox:  { emoji: '🦊', color: '#e2e8f0', name: '小白' },
+  black_fox:  { emoji: '🦊', color: '#1e293b', name: '小黑' },
   fox_leader: { emoji: '🦊', color: '#ec4899', name: '花火' },
 };
 

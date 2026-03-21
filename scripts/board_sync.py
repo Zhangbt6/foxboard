@@ -2,6 +2,10 @@
 """
 FoxBoard BOARD.md 同步脚本 v2.0 (board_sync.py)
 
+⚠️ MIGRATION-ONLY — 本脚本已降级为历史兼容/一次性迁移工具。
+不再作为日常主路径。日常任务流转方向：DB/API → BOARD（投影），而非 BOARD → DB。
+详见 docs/SINGLE_SOURCE_OF_TRUTH.md
+
 将 BOARD.md 中的任务条目同步到 FoxBoard 后端 SQLite 数据库。
 
 支持格式：
@@ -68,16 +72,92 @@ def _parse_markdown_table(text: str) -> list[list[str]]:
         # 去掉首尾 |
         inner = line.strip("|")
         cells = [c.strip() for c in inner.split("|")]
+        # 过滤空单元格（首尾|产生的空元素）
+        cells = [c for c in cells if c]
+        # 跳过表头分隔行（全是 --- 的行）
+        if cells and all(c == "---" for c in cells):
+            continue
         rows.append(cells)
-    # 跳过表头分隔行（第二行通常是 |---|---|）
     return rows
 
 
 def _extract_table_tasks(phase_text: str) -> list[dict]:
-    """从 Phase 7 表格格式提取任务"""
+    """从 Phase 7 表格格式提取任务（支持新旧两种格式）"""
     tasks = []
 
-    # 找到表格（从 ### 📊 进度总览 开始）
+    # ---- 格式1：新格式：分组子表（#### 🔵 DOING（5个）| #### 🟡 REVIEW（3个）等）----
+    # 找到所有分组子表（状态组标题 + markdown 表格）
+    # 注意：BOARD.md 使用全角括号（），不是半角()
+    group_pattern = re.compile(
+        r"#### [\U0001F300-\U0001FFFF][^\n]*（(\d+)个）\s*\n((?:\|[^\n]*\n)+)",
+        re.DOTALL
+    )
+
+    # 状态名映射（从 emoji 组标题中推断）
+    STATUS_EMOJI_MAP = {
+        "📋": "TODO",
+        "🔵": "DOING",
+        "🟡": "REVIEW",
+        "✅": "DONE",
+        "🚫": "BLOCKED",
+    }
+
+    for m in group_pattern.finditer(phase_text):
+        # 从 emoji 判断状态
+        match_start = m.group(0)
+        # 提取 emoji（第一个表情符号字符）
+        emoji_match = re.search(r'[\U0001F300-\U0001FFFF]', match_start)
+        emoji_key = emoji_match.group(0) if emoji_match else ""
+        section_status = STATUS_EMOJI_MAP.get(emoji_key, None)
+
+        if section_status == "DONE":
+            # DONE 任务不主动同步（由黑狐审核后花火确认）
+            continue
+
+        table_text = m.group(2)
+        rows = _parse_markdown_table(table_text)
+        if len(rows) < 2:
+            continue
+
+        header = [c.lower() for c in rows[0]]
+        try:
+            idx_id = header.index("id")
+            idx_task = header.index("任务名")
+            idx_assignee = header.index("负责人")
+        except ValueError:
+            continue
+
+        for row in rows[1:]:
+            # 跳过表头分隔线行（如 |---|---|---|---|）
+            if row and all(c == '---' for c in row):
+                continue
+            if len(row) <= max(idx_id, idx_task, idx_assignee):
+                continue
+            task_id = row[idx_id].strip().strip("`")
+            title = row[idx_task].strip()
+            assignee_raw = row[idx_assignee].strip()
+
+            assignee_id = _normalize_assignee(assignee_raw)
+            status = section_status or "TODO"
+
+            # 支持多种 ID 格式
+            if not re.match(r"^(FB|TASK-FB|FB-HSK|FB-PROJ)\S+", task_id):
+                continue
+
+            tasks.append({
+                "id": task_id,
+                "title": title,
+                "description": "",
+                "status": status,
+                "assignee_id": assignee_id,
+                "priority": 0,
+                "tags": "",
+            })
+
+    if tasks:
+        return tasks
+
+    # ---- 格式2（旧）：单一大表（### 📊 进度总览）----
     table_match = re.search(r"### 📊 进度总览\s*\n(\|.*?(?=\n### |\n\n|\Z))", phase_text, re.DOTALL)
     if not table_match:
         return tasks
@@ -210,6 +290,12 @@ def extract_tasks(board_text: str) -> list[dict]:
         active_phases.append((phase_num, version, phase_content))
 
     if not active_phases:
+        # 无 Phase 章节时，尝试解析非 Phase 格式（当前 BOARD.md 格式）
+        print("   未找到 Phase 章节，尝试新格式解析...", file=sys.stderr)
+        table_tasks = _extract_table_tasks(board_text)
+        if table_tasks:
+            print(f"   使用新格式解析，找到 {len(table_tasks)} 个任务", file=sys.stderr)
+            return table_tasks
         print("⚠️ 未找到任何 Phase 任务区域", file=sys.stderr)
         return []
 

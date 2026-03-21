@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { getKanban, getEvents } from '../api/client';
 import { useWebSocket, type WSStatus } from '../hooks/useWebSocket';
 import { useProject } from '../contexts/ProjectContext';
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 interface KanbanData {
   columns: { status: string; tasks: Task[] }[];
@@ -88,6 +91,53 @@ export default function Dashboard() {
 
   const timeoutEvents = events.filter(e => e.event_type === 'task_timeout');
   const reviewEvents = events.filter(e => e.event_type === 'task_review_requested');
+
+  // 图表数据：任务状态分布（环形图）
+  const STATUS_COLORS: Record<string, string> = {
+    TODO: '#94a3b8',
+    DOING: '#60a5fa',
+    REVIEW: '#fbbf24',
+    DONE: '#4ade80',
+    BLOCKED: '#ef4444',
+  };
+  const statusChartData = (kanban?.columns ?? []).map(col => ({
+    name: col.status,
+    value: col.tasks.length,
+    fill: STATUS_COLORS[col.status] ?? '#64748b',
+  }));
+
+  // 图表数据：优先级分布（柱状图）
+  const PRIORITY_LABELS: Record<number, string> = {
+    10: 'P10 最高',
+    9: 'P9 很高',
+    8: 'P8 高',
+    7: 'P7 中高',
+    6: 'P6 中',
+    5: 'P5 中低',
+    4: 'P4 低',
+    3: 'P3 很低',
+    2: 'P2 最低',
+    1: 'P1',
+    0: 'P0',
+  };
+  const priorityGroups = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+  const priorityChartData = priorityGroups
+    .map(p => ({
+      priority: PRIORITY_LABELS[p] ?? `P${p}`,
+      count: allTasks.filter(t => t.priority === p).length,
+      p,
+    }))
+    .filter(d => d.count > 0);
+
+  // 事件类型分布
+  const eventTypeCount: Record<string, number> = {};
+  events.forEach(e => {
+    eventTypeCount[e.event_type] = (eventTypeCount[e.event_type] ?? 0) + 1;
+  });
+  const eventChartData = Object.entries(eventTypeCount)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
 
   return (
     <div style={{ padding: 32 }}>
@@ -192,6 +242,87 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* 图表区域 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 24 }}>
+
+        {/* 任务状态环形图 */}
+        <div style={{ background: 'var(--foxboard-surface)', border: '1px solid var(--foxboard-border)', borderRadius: 12, padding: 24 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: '#e2e8f0' }}>📊 任务状态分布</h3>
+          {totalTasks === 0 ? (
+            <div style={{ color: '#475569', fontSize: 12, textAlign: 'center', padding: 24 }}>暂无数据</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={statusChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={75}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {statusChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: '#1e1e2e', border: '1px solid #3f3f5a', borderRadius: 8, fontSize: 12 }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  formatter={(value, name) => [`${value} 个任务`, name]}
+                />
+                <Legend
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: 11, color: '#94a3b8' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* 优先级柱状图 */}
+        <div style={{ background: 'var(--foxboard-surface)', border: '1px solid var(--foxboard-border)', borderRadius: 12, padding: 24 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: '#e2e8f0' }}>📈 优先级分布</h3>
+          {priorityChartData.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: 12, textAlign: 'center', padding: 24 }}>暂无数据</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={priorityChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <XAxis dataKey="priority" tick={{ fontSize: 9, fill: '#64748b' }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} />
+                <Tooltip
+                  contentStyle={{ background: '#1e1e2e', border: '1px solid #3f3f5a', borderRadius: 8, fontSize: 12 }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  cursor={{ fill: 'rgba(96,165,250,0.1)' }}
+                />
+                <Bar dataKey="count" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* 事件类型分布 */}
+        <div style={{ background: 'var(--foxboard-surface)', border: '1px solid var(--foxboard-border)', borderRadius: 12, padding: 24 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: '#e2e8f0' }}>📋 事件类型 TOP8</h3>
+          {eventChartData.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: 12, textAlign: 'center', padding: 24 }}>暂无数据</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={eventChartData} layout="vertical" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 9, fill: '#64748b' }} />
+                <YAxis type="category" dataKey="type" tick={{ fontSize: 9, fill: '#64748b' }} width={100} />
+                <Tooltip
+                  contentStyle={{ background: '#1e1e2e', border: '1px solid #3f3f5a', borderRadius: 8, fontSize: 12 }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  cursor={{ fill: 'rgba(96,165,250,0.1)' }}
+                />
+                <Bar dataKey="count" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
 
       {/* 事件流 */}
       <div style={{ background: 'var(--foxboard-surface)', border: '1px solid var(--foxboard-border)', borderRadius: 12, padding: 24 }}>

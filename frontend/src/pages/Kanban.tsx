@@ -64,9 +64,9 @@ const NEXT_STATUS: Record<string, string> = {
 const ROLE_FILTERS = [
   { id: 'all', label: '全部' },
   { id: 'fox_leader', label: '🦊 花火' },
-  { id: 'white_fox', label: '🦊 白狐' },
-  { id: 'fox_001', label: '🦊 青狐' },
-  { id: 'black_fox', label: '🦊 黑狐' },
+  { id: 'white_fox', label: '🦊 小白' },
+  { id: 'qing_fox', label: '🦊 小青' },
+  { id: 'black_fox', label: '🦊 小黑' },
 ];
 
 // ---- 子组件 ----
@@ -276,6 +276,7 @@ export default function Kanban() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');  // FB-055: 优先级筛选
   const [agents, setAgents] = useState<Agent[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
 
@@ -313,12 +314,18 @@ export default function Kanban() {
     return diff < 5 * 60 * 1000;
   }).length || 1;
 
-  // 角色过滤后的列数据
+  // FB-055: 角色 + 优先级过滤后的列数据
   const filteredColumns = columns.map(col => ({
     ...col,
-    tasks: roleFilter === 'all'
-      ? col.tasks
-      : col.tasks.filter(t => t.assignee_id === roleFilter),
+    tasks: col.tasks.filter(t => {
+      // 角色过滤
+      if (roleFilter !== 'all' && t.assignee_id !== roleFilter) return false;
+      // 优先级过滤
+      if (priorityFilter === 'high' && t.priority < 8) return false;
+      if (priorityFilter === 'medium' && (t.priority < 5 || t.priority > 7)) return false;
+      if (priorityFilter === 'low' && t.priority > 4) return false;
+      return true;
+    }),
   }));
 
   return (
@@ -334,7 +341,7 @@ export default function Kanban() {
       />
 
       {/* 角色过滤 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {ROLE_FILTERS.map(f => (
           <button
             key={f.id}
@@ -354,9 +361,37 @@ export default function Kanban() {
             {f.label}
           </button>
         ))}
-        {roleFilter !== 'all' && (
+
+        {/* FB-055: 优先级过滤 */}
+        <div style={{ width: 1, height: 20, background: '#334155', margin: '0 4px' }} />
+        {[
+          { id: 'all', label: '全部优先级' },
+          { id: 'high', label: '🔴 P8+' },
+          { id: 'medium', label: '🟡 P5-7' },
+          { id: 'low', label: '⚪ P1-4' },
+        ].map(f => (
+          <button
+            key={f.id}
+            onClick={() => setPriorityFilter(f.id)}
+            style={{
+              background: priorityFilter === f.id ? '#7c3aed' : '#1e293b',
+              color: priorityFilter === f.id ? '#fff' : '#94a3b8',
+              border: priorityFilter === f.id ? '1px solid #7c3aed' : '1px solid #334155',
+              borderRadius: 6,
+              padding: '5px 12px',
+              fontSize: 12,
+              cursor: 'pointer',
+              fontWeight: priorityFilter === f.id ? 600 : 400,
+              transition: 'all 0.15s',
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+
+        {(roleFilter !== 'all' || priorityFilter !== 'all') && (
           <span style={{ fontSize: 11, color: '#475569', alignSelf: 'center' }}>
-            （筛选 {filteredColumns.reduce((s, c) => s + c.tasks.length, 0)} 个任务）
+            （{filteredColumns.reduce((s, c) => s + c.tasks.length, 0)} 个任务）
           </span>
         )}
       </div>
@@ -366,7 +401,7 @@ export default function Kanban() {
         <div style={{ color: '#94a3b8', padding: 32, textAlign: 'center' }}>加载中...</div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, alignItems: 'flex-start' }}>
         {filteredColumns.map(col => {
           const meta = STATUS_META[col.status] ?? { label: col.status, color: '#94a3b8', bg: '#1e293b' };
           return (

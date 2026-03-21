@@ -54,8 +54,6 @@ def register_agent(payload: AgentRegister):
         INSERT INTO agents (id, name, role, status, created_at, updated_at)
         VALUES (?, ?, ?, 'idle', ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            role = excluded.role,
             updated_at = excluded.updated_at
     """, (payload.agent_id, payload.name, payload.role.value, now, now))
     conn.commit()

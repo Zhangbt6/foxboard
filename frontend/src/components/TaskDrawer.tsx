@@ -92,7 +92,7 @@ export default function TaskDrawer({ taskId, onClose, onRefresh }: TaskDrawerPro
     if (!taskId) return;
     setActing(true);
     try {
-      const agentId = localStorage.getItem('agent_id') ?? 'fox_001';
+      const agentId = localStorage.getItem('agent_id') ?? 'qing_fox';
       if (action === 'claim') {
         await claimTask(taskId, { assignee_id: agentId });
       } else if (action === 'submit') {

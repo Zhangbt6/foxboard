@@ -148,19 +148,19 @@ class TestDeleteTask:
 
 class TestKanbanView:
     def test_kanban_empty(self, client: TestClient):
-        """空看板返回四列"""
+        """空看板返回五列（含BLOCKED）"""
         resp = client.get("/tasks/kanban")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["columns"]) == 4
+        assert len(data["columns"]) == 5
         statuses = [c["status"] for c in data["columns"]]
-        assert statuses == ["TODO", "DOING", "REVIEW", "DONE"]
+        assert statuses == ["TODO", "DOING", "REVIEW", "DONE", "BLOCKED"]
         for col in data["columns"]:
             assert col["tasks"] == []
 
     def test_kanban_with_tasks(self, client: TestClient):
-        """看板按状态分组"""
-        for i, status in enumerate(["TODO", "DOING", "REVIEW", "DONE"]):
+        """看板按状态分组（含BLOCKED）"""
+        for i, status in enumerate(["TODO", "DOING", "REVIEW", "DONE", "BLOCKED"]):
             client.post("/tasks/", json={
                 "id": f"FB-kanban-{i}", "title": f"Task {i}", "status": status, "priority": i
             })

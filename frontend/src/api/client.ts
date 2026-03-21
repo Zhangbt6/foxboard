@@ -56,7 +56,7 @@ export const createEvent = (event: {
 export const getWorkflows = (params?: { project_id?: string }) =>
   api.get('/workflows/', { params });
 
-export const getWorkflowNodes = (workflowId: number) =>
+export const getWorkflowNodes = (workflowId: string) =>
   api.get(`/workflows/${workflowId}/nodes`);
 
 export const updateWorkflowNode = (workflowId: number, nodeId: string, updates: { status?: string; task_id?: string }) =>

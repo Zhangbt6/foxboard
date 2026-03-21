@@ -19,15 +19,15 @@ interface Task {
   status: string;
 }
 
-const FOX_META: Record<string, { emoji: string; color: string; role: string }> = {
-  fox_001:    { emoji: '🦊', color: '#7c3aed', role: '青狐 · 开发' },
-  white_fox:  { emoji: '🦊', color: '#e2e8f0', role: '白狐 · 调研' },
-  black_fox:  { emoji: '🦊', color: '#1e293b', role: '黑狐 · 审核' },
-  fox_leader: { emoji: '🦊', color: '#ec4899', role: '花火 · 指挥官' },
+const FOX_META: Record<string, { emoji: string; color: string; role: string; label: string }> = {
+  qing_fox:   { emoji: '🦊', color: '#7c3aed', role: '开发', label: '小青' },
+  white_fox:  { emoji: '🦊', color: '#e2e8f0', role: '设计', label: '小白' },
+  black_fox:  { emoji: '🦊', color: '#1e293b', role: '运维', label: '小黑' },
+  fox_leader: { emoji: '🦊', color: '#ec4899', role: '指挥官', label: '花火' },
 };
 
 function FoxAvatar({ agentId, size = 64 }: { agentId: string; size?: number }) {
-  const meta = FOX_META[agentId] ?? { emoji: '🦊', color: '#7c3aed', role: '未知' };
+  const meta = FOX_META[agentId] ?? { emoji: '🦊', color: '#7c3aed', role: '未知', label: agentId };
   return (
     <div style={{
       width: size, height: size, borderRadius: 12,
@@ -93,7 +93,6 @@ export default function Agents() {
 
   useEffect(() => { load(); }, [load]);
 
-  // WebSocket 实时推送（替代轮询）
   const { status: wsStatus } = useWebSocket({
     onMessage: (msg) => {
       const event = msg.event as string;
@@ -110,7 +109,9 @@ export default function Agents() {
     if (!iso) return '—';
     try {
       return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    } catch { return iso; }
+    } catch {
+      return iso;
+    }
   };
 
   const selectAgent = (agentId: string) => {
@@ -121,7 +122,9 @@ export default function Agents() {
   return (
     <div style={{ padding: 32 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>成员状态 <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>（点击成员卡片进入「我的任务」视图）</span></h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700 }}>
+          成员状态 <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>（点击成员卡片进入「我的任务」视图）</span>
+        </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <WSStatusDot status={wsStatus} />
           {lastUpdated && (
@@ -136,26 +139,31 @@ export default function Agents() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
         {agents.map(agent => {
-          const meta = FOX_META[agent.id] ?? { emoji: '🦊', color: '#7c3aed', role: agent.role };
+          const meta = FOX_META[agent.id] ?? { emoji: '🦊', color: '#7c3aed', role: agent.role, label: agent.name };
           return (
-            <div key={agent.id} style={{
-              background: 'var(--foxboard-surface)',
-              border: `1px solid ${meta.color}33`,
-              borderRadius: 16, padding: 24,
-              display: 'flex', gap: 20, alignItems: 'flex-start',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s',
-            }}
-            onClick={() => selectAgent(agent.id)}
-            title="点击进入该成员的任务队列"
-          >
+            <div
+              key={agent.id}
+              style={{
+                background: 'var(--foxboard-surface)',
+                border: `1px solid ${meta.color}33`,
+                borderRadius: 16,
+                padding: 24,
+                display: 'flex',
+                gap: 20,
+                alignItems: 'flex-start',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onClick={() => selectAgent(agent.id)}
+              title="点击进入该成员的任务队列"
+            >
               <FoxAvatar agentId={agent.id} size={72} />
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9' }}>{agent.name}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9' }}>{meta.label}</div>
                   <StatusDot status={agent.status} />
                 </div>
-                <div style={{ fontSize: 12, color: meta.color, marginBottom: 16 }}>{meta.role}</div>
+                <div style={{ fontSize: 12, color: meta.color, marginBottom: 16 }}>{meta.label} · {meta.role}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 13 }}>
                   <div>
                     <div style={{ color: '#475569', fontSize: 11, marginBottom: 2 }}>当前任务</div>

@@ -13,6 +13,9 @@ class AgentRole(str, Enum):
     worker = "worker"
     commander = "commander"
     auditor = "auditor"
+    developer = "developer"
+    designer = "designer"
+    ops = "ops"
 
 class AgentStatus(str, Enum):
     idle = "idle"
@@ -34,6 +37,15 @@ class EventType(str, Enum):
     task_created = "task_created"
     task_updated = "task_updated"
     task_completed = "task_completed"
+    task_claimed = "task_claimed"
+    task_submitted = "task_submitted"
+    task_review_passed = "task_review_passed"
+    task_review_failed = "task_review_failed"
+    task_activated = "task_activated"
+    task_timeout = "task_timeout"
+    task_deleted = "task_deleted"
+    project_created = "project_created"
+    project_updated = "project_updated"
     agent_heartbeat = "agent_heartbeat"
     agent_registered = "agent_registered"
 
@@ -115,6 +127,14 @@ class Task(BaseModel):
     created_at: str
     updated_at: str
     completed_at: Optional[str] = None
+    archived_at: Optional[str] = None
+    archive_phase: Optional[str] = None
+    archive_note: Optional[str] = None
+
+class TaskArchiveRequest(BaseModel):
+    operator_id: str
+    phase_label: str = Field(default="PHASE8")
+    note: Optional[str] = None
 
 class KanbanColumn(BaseModel):
     status: TaskStatus

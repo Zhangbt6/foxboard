@@ -133,10 +133,13 @@ def migrate_add_columns():
     """
     conn = get_conn()
     cursor = conn.cursor()
-    # tasks 表 v0.4+ 新增字段
+    # tasks 表增量字段
     extra_cols = [
         ("ALTER TABLE tasks ADD COLUMN started_at TEXT", "started_at"),
         ("ALTER TABLE tasks ADD COLUMN depends_on TEXT", "depends_on"),
+        ("ALTER TABLE tasks ADD COLUMN archived_at TEXT", "archived_at"),
+        ("ALTER TABLE tasks ADD COLUMN archive_phase TEXT", "archive_phase"),
+        ("ALTER TABLE tasks ADD COLUMN archive_note TEXT", "archive_note"),
     ]
     cursor.execute("PRAGMA table_info(tasks)")
     existing_cols = [row[1] for row in cursor.fetchall()]

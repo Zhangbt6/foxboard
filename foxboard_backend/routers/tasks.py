@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sqlite3
 import sys
 import threading
@@ -19,6 +20,7 @@ from ..models import (
     TaskClaimRequest, TaskSubmitRequest,
     TaskReviewRequest, TaskRejectRequest,
     TaskBulkCreateRequest, TaskOperationResponse, TaskBulkResponse,
+    TaskArchiveRequest,
 )
 from ..event_bus import event_bus
 from ..task_context import build_task_context
@@ -49,40 +51,177 @@ TIMEOUT_HOURS = float(__import__("os").environ.get("TASK_TIMEOUT_HOURS", "2"))
 
 
 def row_to_task(row) -> Task:
+    d = dict(row)
     return Task(
-        id=row["id"],
-        title=row["title"],
-        description=row["description"],
-        status=row["status"],
-        priority=row["priority"],
-        assignee_id=row["assignee_id"],
-        project_id=row["project_id"],
-        tags=row["tags"],
-        started_at=row["started_at"],
-        depends_on=row["depends_on"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-        completed_at=row["completed_at"],
+        id=d["id"],
+        title=d["title"],
+        description=d.get("description"),
+        status=d["status"],
+        priority=d["priority"],
+        assignee_id=d.get("assignee_id"),
+        project_id=d.get("project_id"),
+        tags=d.get("tags"),
+        started_at=d.get("started_at"),
+        depends_on=d.get("depends_on"),
+        created_at=d["created_at"],
+        updated_at=d["updated_at"],
+        completed_at=d.get("completed_at"),
+        archived_at=d.get("archived_at"),
+        archive_phase=d.get("archive_phase"),
+        archive_note=d.get("archive_note"),
     )
 
 
-def _notify_black_fox(task_id: str, title: str):
-    """任务进入 REVIEW 时通知黑狐审核"""
-    # 阻止测试数据误报（测试任务ID以 FB-SUB- 开头）
-    if task_id.startswith("FB-SUB-"):
+def _is_test_task(task_id: str) -> bool:
+    """测试任务不触发通知"""
+    return task_id.startswith("FB-SUB-") or task_id.startswith("TEST-")
+
+
+def _is_test_runtime() -> bool:
+    """pytest 运行期间禁止真实外发通知"""
+    return bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
+# ---- FB-051: EventBus → Workflow 状态联动 ----
+# 任务状态 → 工作流节点状态 映射
+_TASK_TO_NODE_STATUS: Record[str, str] = {
+    "TODO":    "pending",
+    "DOING":   "running",
+    "REVIEW":  "review",
+    "DONE":    "done",
+    "BLOCKED": "blocked",
+}
+
+
+def _sync_workflow_node_for_task(task_id: str, task_status: str) -> None:
+    """
+    当任务状态变化时，同步更新对应工作流节点的显示状态。
+    实现 EventBus → Workflow 状态联动（FB-051）。
+
+    逻辑：
+    1. 在 workflow_node_states 表中查找关联该 task_id 的节点
+    2. 将该节点 status 更新为对应的工作流状态
+    """
+    node_status = _TASK_TO_NODE_STATUS.get(task_status)
+    if not node_status:
+        return
+
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+        # 查找关联该 task_id 的工作流节点
+        cursor.execute(
+            "SELECT workflow_id, node_id FROM workflow_node_states WHERE task_id = ?",
+            (task_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return
+
+        workflow_id = row["workflow_id"]
+        node_id = row["node_id"]
+        now = datetime.utcnow().isoformat()
+
+        cursor.execute("""
+            UPDATE workflow_node_states
+            SET status = ?, updated_at = ?
+            WHERE workflow_id = ? AND node_id = ?
+        """, (node_status, now, workflow_id, node_id))
+        conn.commit()
+        conn.close()
+        print(f"[FB-051] 同步工作流节点 {workflow_id}/{node_id} → {node_status} (task={task_id})")
+    except Exception as e:
+        # 不阻塞主流程，仅记录
+        print(f"[FB-051] 工作流节点同步失败: {e}")
+
+
+
+def _notify_via_foxcomms(to: str, message: str, sender: str = "系统", msg_type: str = None, wake: bool = True):
+    """统一 FoxComms 通知入口"""
+    if _is_test_runtime() or not to:
         return
     try:
         from foxcomms import FoxComms
         FoxComms("FoxBoard").send(
-            to="黑狐",
-            message=f"TASK-{task_id}「{title}」已进入 REVIEW，请审核",
-            sender="青狐",
-            msg_type="审核",
-            wake=True,
+            to=to,
+            message=message,
+            sender=sender,
+            msg_type=msg_type,
+            wake=wake,
             notify_group=True,
         )
     except Exception as e:
-        print(f"[WARN] FoxComms 通知黑狐失败: {e}")
+        print(f"[WARN] FoxComms 通知 {to} 失败: {e}")
+
+
+# Agent ID → 中文名映射
+AGENT_NAME_MAP = {
+    "qing_fox": "青狐", "white_fox": "白狐", "black_fox": "黑狐",
+    "main": "花火", "worker": "青狐",
+}
+
+
+def _notify_assignee(task_id: str, title: str, assignee_id: str, action: str = "派单"):
+    """任务分配/创建时通知负责人"""
+    if _is_test_task(task_id) or not assignee_id:
+        return
+    name = AGENT_NAME_MAP.get(assignee_id)
+    if not name:
+        return
+    _notify_via_foxcomms(
+        to=name,
+        message=f"TASK-{task_id}「{title}」已分配给你，请领取执行",
+        sender="花火",
+        msg_type="派单",
+    )
+
+
+def _notify_black_fox(task_id: str, title: str, submitter: str = "青狐"):
+    """任务进入 REVIEW 时通知黑狐审核"""
+    if _is_test_task(task_id):
+        return
+    _notify_via_foxcomms(
+        to="黑狐",
+        message=f"TASK-{task_id}「{title}」已进入 REVIEW，请审核",
+        sender=submitter,
+        msg_type="审核",
+    )
+
+
+def _notify_review_result(task_id: str, title: str, assignee_id: str, passed: bool, reason: str = ""):
+    """审核结果通知执行人 + 花火"""
+    if _is_test_task(task_id):
+        return
+    name = AGENT_NAME_MAP.get(assignee_id) if assignee_id else None
+    if passed:
+        msg = f"TASK-{task_id}「{title}」审核通过 ✅"
+        if name:
+            _notify_via_foxcomms(to=name, message=msg, sender="黑狐", msg_type="通知", wake=False)
+        _notify_via_foxcomms(to="花火", message=msg, sender="黑狐", msg_type="通知", wake=False)
+    else:
+        msg = f"TASK-{task_id}「{title}」审核打回 ❌ 原因：{reason}"
+        if name:
+            _notify_via_foxcomms(to=name, message=msg, sender="黑狐", msg_type="通知", wake=True)
+
+
+def _append_archive_record(project_id: str, task_row, phase_label: str, operator_id: str, note: str = None):
+    """归档后追加到当前 phase 的开发记录"""
+    try:
+        base = "/home/muyin/.openclaw/workspace/black_fox/projects/FoxBoard/docs"
+        file_path = os.path.join(base, f"{phase_label.upper()}_ARCHIVE.md")
+        if not os.path.exists(file_path):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"# {phase_label.upper()} Archive\n\n")
+                f.write("| 时间 | 任务ID | 任务名 | 负责人 | 操作者 | 备注 |\n")
+                f.write("|------|--------|--------|--------|--------|------|\n")
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        with open(file_path, "a", encoding="utf-8") as f:
+            f.write(
+                f"| {now} | {task_row['id']} | {task_row['title']} | {task_row['assignee_id'] or '—'} | {operator_id} | {note or ''} |\n"
+            )
+    except Exception as e:
+        print(f"[WARN] 归档记录写入失败: {e}")
 
 
 def _activate_blocked_tasks(completed_task_id: str):
@@ -170,7 +309,7 @@ def list_tasks(
     """
     conn = get_conn()
     cursor = conn.cursor()
-    query = "SELECT t.* FROM tasks t WHERE 1=1"
+    query = "SELECT t.* FROM tasks t WHERE t.archived_at IS NULL"
     params = []
     if status:
         query += " AND t.status = ?"
@@ -196,17 +335,17 @@ def kanban_view(project_id: Optional[str] = None):
     """看板视图——四列 TODO / DOING / REVIEW / DONE"""
     conn = get_conn()
     cursor = conn.cursor()
-    query = "SELECT * FROM tasks"
+    query = "SELECT * FROM tasks WHERE archived_at IS NULL"
     params = []
     if project_id:
-        query += " WHERE project_id = ?"
+        query += " AND project_id = ?"
         params.append(project_id)
     query += " ORDER BY priority DESC, created_at DESC"
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     columns = []
-    for status in ["TODO", "DOING", "REVIEW", "DONE"]:
+    for status in ["TODO", "DOING", "REVIEW", "DONE", "BLOCKED"]:
         tasks = [row_to_task(r) for r in rows if r["status"] == status]
         columns.append(KanbanColumn(status=status, tasks=tasks))
     return KanbanView(columns=columns)
@@ -220,7 +359,7 @@ def my_tasks(agent_id: str, status: Optional[str] = None):
     """
     conn = get_conn()
     cursor = conn.cursor()
-    query = "SELECT * FROM tasks WHERE assignee_id = ?"
+    query = "SELECT * FROM tasks WHERE assignee_id = ? AND archived_at IS NULL"
     params = [agent_id]
     if status:
         query += " AND status = ?"
@@ -264,6 +403,10 @@ def create_task(payload: TaskCreate):
         actor_id=payload.assignee_id or "system",
         task_data=task.model_dump(),
     )
+
+    # R3: 创建任务时自动通知负责人
+    if payload.assignee_id:
+        _notify_assignee(payload.id, payload.title, payload.assignee_id)
 
     return task
 
@@ -360,7 +503,12 @@ def update_task(task_id: str, payload: TaskUpdate):
 
     # REVIEW → 通知黑狐审核
     if new_status == "REVIEW" and old_status != "REVIEW":
-        _notify_black_fox(task_id, row["title"])
+        submitter_name = AGENT_NAME_MAP.get(payload.assignee_id or row["assignee_id"], "青狐")
+        _notify_black_fox(task_id, row["title"], submitter_name)
+
+    # R3: assignee 变更时通知新负责人
+    if payload.assignee_id and payload.assignee_id != row["assignee_id"]:
+        _notify_assignee(task_id, row["title"], payload.assignee_id)
 
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
     updated_row = cursor.fetchone()
@@ -375,11 +523,15 @@ def update_task(task_id: str, payload: TaskUpdate):
         changes={k: v for k, v in payload.model_dump().items() if v is not None},
     )
 
+    # FB-051: 同步工作流节点状态
+    _sync_workflow_node_for_task(task_id, task.status)
+
     return task
 
 
 @router.delete("/{task_id}")
 def delete_task(task_id: str):
+    """销毁任务：直接删除，不保留在 active 看板"""
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
@@ -394,7 +546,48 @@ def delete_task(task_id: str):
     # 通过 EventBus 记录删除事件
     event_bus.task_deleted(task_id=task_id, project_id=row["project_id"], actor_id="system")
 
-    return {"ok": True, "deleted": task_id}
+    return {"ok": True, "deleted": task_id, "mode": "destroyed"}
+
+
+@router.post("/{task_id}/archive")
+def archive_task(task_id: str, payload: TaskArchiveRequest):
+    """归档任务：从当前看板退出，并写入 phase 版本归档记录"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Task not found")
+    if row["archived_at"] is not None:
+        conn.close()
+        return {"ok": True, "archived": task_id, "phase": row["archive_phase"], "message": "任务已归档"}
+    if row["status"] != "DONE":
+        conn.close()
+        raise HTTPException(status_code=400, detail="只有 DONE 任务才能归档")
+
+    now = datetime.utcnow().isoformat()
+    cursor.execute(
+        """
+        UPDATE tasks
+        SET archived_at = ?, archive_phase = ?, archive_note = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (now, payload.phase_label.upper(), payload.note, now, task_id),
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    updated = cursor.fetchone()
+    conn.close()
+
+    _append_archive_record(updated["project_id"], updated, payload.phase_label, payload.operator_id, payload.note)
+    event_bus.task_updated(
+        task_id=task_id,
+        project_id=updated["project_id"],
+        actor_id=payload.operator_id,
+        changes={"archived_at": now, "archive_phase": payload.phase_label.upper()},
+    )
+    return {"ok": True, "archived": task_id, "phase": payload.phase_label.upper(), "message": "任务已归档"}
 
 
 # ---- Task Lifecycle Endpoints ----
@@ -469,6 +662,9 @@ def claim_task(task_id: str, payload: TaskClaimRequest):
         project_id=row["project_id"],
         actor_id=payload.agent_id,
     )
+
+    # FB-051: 同步工作流节点状态（claim: TODO → DOING → running）
+    _sync_workflow_node_for_task(task_id, "DOING")
 
     # 构建任务上下文
     project_name = None
@@ -545,8 +741,12 @@ def submit_task(task_id: str, payload: TaskSubmitRequest):
         message=payload.message,
     )
 
+    # FB-051: 同步工作流节点状态（submit: DOING → REVIEW → review）
+    _sync_workflow_node_for_task(task_id, "REVIEW")
+
     # 通知黑狐审核
-    _notify_black_fox(task_id, task.title)
+    submitter_name = AGENT_NAME_MAP.get(payload.agent_id, "青狐")
+    _notify_black_fox(task_id, task.title, submitter_name)
 
     return TaskOperationResponse(ok=True, task=task, message="任务已提交，等待审核")
 
@@ -592,8 +792,14 @@ def review_task(task_id: str, payload: TaskReviewRequest):
         auditor_id=payload.auditor_id,
     )
 
+    # FB-051: 同步工作流节点状态（pass: REVIEW → DONE → done）
+    _sync_workflow_node_for_task(task_id, "DONE")
+
     # 激活依赖任务
     _activate_blocked_tasks(task_id)
+
+    # R3: 审核通过通知执行人 + 花火
+    _notify_review_result(task_id, row["title"], row["assignee_id"], passed=True)
 
     return TaskOperationResponse(ok=True, task=task, message="审核通过，任务已完成")
 
@@ -639,6 +845,12 @@ def reject_task(task_id: str, payload: TaskRejectRequest):
         reason=payload.reason,
     )
 
+    # FB-051: 同步工作流节点状态（reject: REVIEW → DOING → running）
+    _sync_workflow_node_for_task(task_id, "DOING")
+
+    # R3: 审核打回通知执行人
+    _notify_review_result(task_id, row["title"], row["assignee_id"], passed=False, reason=payload.reason)
+
     return TaskOperationResponse(ok=True, task=task, message=f"任务已打回：{payload.reason}")
 
 
@@ -678,6 +890,9 @@ def bulk_create_tasks(payload: TaskBulkCreateRequest):
                 actor_id="bulk",
                 task_data=task.model_dump(),
             )
+            # R3: 批量创建也通知负责人
+            if task_create.assignee_id:
+                _notify_assignee(task_create.id, task_create.title, task_create.assignee_id)
         except sqlite3.IntegrityError as e:
             conn.rollback()
             failed.append({"id": task_create.id, "title": task_create.title, "error": f"任务 ID 已存在：{task_create.id}"})

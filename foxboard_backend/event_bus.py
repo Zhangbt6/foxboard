@@ -187,17 +187,20 @@ class EventBus:
             p = Path(env_path)
             if p.is_dir():
                 return p
-        # 默认推断
-        default = (
-            Path.home()
-            / ".openclaw"
-            / "workspace"
-            / "qinghu"
-            / "projects"
-            / project_id
-        )
-        if default.exists():
-            return default
+
+        base = Path.home() / ".openclaw" / "workspace" / "black_fox" / "projects"
+        candidates = [project_id]
+        if project_id.lower() == "foxboard":
+            candidates.append("FoxBoard")
+        if project_id.capitalize() not in candidates:
+            candidates.append(project_id.capitalize())
+        if project_id.lower() not in candidates:
+            candidates.append(project_id.lower())
+
+        for name in candidates:
+            p = base / name
+            if p.exists():
+                return p
         return None
 
     def set_render_callback(self, callback):
