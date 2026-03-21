@@ -77,6 +77,10 @@ export const updateProject = (id: string, data: Record<string, unknown>) =>
 
 export const deleteProject = (id: string) => api.delete(`/projects/${id}`);
 
+// ---- Analytics ----
+export const getEfficiency = (params?: { project_id?: string; date_range?: string }) =>
+  api.get('/analytics/efficiency', { params });
+
 // ---- Task Operations (Phase 7) ----
 export const getTask = (task_id: string) =>
   api.get(`/tasks/${task_id}`);
@@ -98,3 +102,26 @@ export const rejectTask = (task_id: string, payload: { reason: string }) =>
 
 export const getTaskLogs = (task_id: string, limit = 10) =>
   api.get('/events/', { params: { task_id, limit } });
+
+// ---- Phases (Phase 9) ----
+export const getPhases = (projectId?: string) =>
+  api.get('/phases/', { params: { project_id: projectId } });
+
+export const getPhase = (phaseId: string) =>
+  api.get(`/phases/${phaseId}`);
+
+export const createPhase = (data: {
+  id: string;
+  project_id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  status?: string;
+  goals?: string;
+}) => api.post('/phases/', data);
+
+export const getPhaseTasks = (phaseId: string) =>
+  api.get(`/phases/${phaseId}/tasks`);
+
+export const getArchivedTasks = (params?: { project_id?: string; phase_id?: string; archive_phase?: string }) =>
+  api.get('/tasks/archived', { params });

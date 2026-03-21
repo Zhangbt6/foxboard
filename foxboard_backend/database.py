@@ -201,6 +201,42 @@ def migrate_add_messages_and_reports():
     print("[DB] 迁移：messages + reports 表就绪")
 
 
+def migrate_add_phases():
+    """v0.8.0 迁移：新增 phases 表和 tasks.phase_id 列（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # phases 表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS phases (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            version TEXT,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'planning',
+            goals TEXT,
+            summary TEXT,
+            started_at TEXT,
+            completed_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_phases_project ON phases(project_id)")
+
+    # tasks 表新增 phase_id 列
+    cursor.execute("PRAGMA table_info(tasks)")
+    existing_cols = [row[1] for row in cursor.fetchall()]
+    if "phase_id" not in existing_cols:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN phase_id TEXT")
+        print("[DB] 迁移：tasks 表新增 phase_id 字段")
+
+    conn.commit()
+    conn.close()
+    print("[DB] 迁移：phases 表 + tasks.phase_id 列就绪")
+
+
 if __name__ == "__main__":
     init_db()
     migrate_add_columns()

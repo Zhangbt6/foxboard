@@ -25,8 +25,6 @@ from ..models import (
 from ..event_bus import event_bus
 from ..task_context import build_task_context
 
-# 添加 scripts 路径，以便导入 FoxComms
-
 
 def _run_async_broadcast(coro):
     """
@@ -63,6 +61,7 @@ def row_to_task(row) -> Task:
         tags=d.get("tags"),
         started_at=d.get("started_at"),
         depends_on=d.get("depends_on"),
+        phase_id=d.get("phase_id"),
         created_at=d["created_at"],
         updated_at=d["updated_at"],
         completed_at=d.get("completed_at"),
@@ -137,22 +136,29 @@ def _sync_workflow_node_for_task(task_id: str, task_status: str) -> None:
 
 
 
-def _notify_via_foxcomms(to: str, message: str, sender: str = "系统", msg_type: str = None, wake: bool = True):
-    """统一 FoxComms 通知入口"""
-    if _is_test_runtime() or not to:
+def _notify_via_messages_api(from_agent: str, to_agent: str, body: str,
+                             ref_task_id: str = None, priority: str = "normal"):
+    """统一通知入口 — 走 Messages API（替代旧 FoxComms）"""
+    if _is_test_runtime():
         return
     try:
-        from foxcomms import FoxComms
-        FoxComms("FoxBoard").send(
-            to=to,
-            message=message,
-            sender=sender,
-            msg_type=msg_type,
-            wake=wake,
-            notify_group=True,
+        import urllib.request, json as _json
+        data = _json.dumps({
+            "from_agent": from_agent,
+            "to_agent": to_agent,
+            "body": body,
+            "ref_task_id": ref_task_id,
+            "priority": priority,
+        }).encode()
+        req = urllib.request.Request(
+            "http://localhost:8000/messages/",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
         )
+        urllib.request.urlopen(req, timeout=5)
     except Exception as e:
-        print(f"[WARN] FoxComms 通知 {to} 失败: {e}")
+        print(f"[WARN] Messages API 通知失败: {e}")
 
 
 # Agent ID → 中文名映射
@@ -166,26 +172,24 @@ def _notify_assignee(task_id: str, title: str, assignee_id: str, action: str = "
     """任务分配/创建时通知负责人"""
     if _is_test_task(task_id) or not assignee_id:
         return
-    name = AGENT_NAME_MAP.get(assignee_id)
-    if not name:
-        return
-    _notify_via_foxcomms(
-        to=name,
-        message=f"TASK-{task_id}「{title}」已分配给你，请领取执行",
-        sender="花火",
-        msg_type="派单",
+    _notify_via_messages_api(
+        from_agent="fox_leader",
+        to_agent=assignee_id,
+        body=f"TASK-{task_id}「{title}」已分配给你，请领取执行",
+        ref_task_id=task_id,
     )
 
 
-def _notify_black_fox(task_id: str, title: str, submitter: str = "青狐"):
+def _notify_black_fox(task_id: str, title: str, submitter: str = "qing_fox"):
     """任务进入 REVIEW 时通知黑狐审核"""
     if _is_test_task(task_id):
         return
-    _notify_via_foxcomms(
-        to="黑狐",
-        message=f"TASK-{task_id}「{title}」已进入 REVIEW，请审核",
-        sender=submitter,
-        msg_type="审核",
+    _notify_via_messages_api(
+        from_agent=submitter,
+        to_agent="black_fox",
+        body=f"TASK-{task_id}「{title}」已进入 REVIEW，请审核",
+        ref_task_id=task_id,
+        priority="high",
     )
 
 
@@ -193,16 +197,15 @@ def _notify_review_result(task_id: str, title: str, assignee_id: str, passed: bo
     """审核结果通知执行人 + 花火"""
     if _is_test_task(task_id):
         return
-    name = AGENT_NAME_MAP.get(assignee_id) if assignee_id else None
     if passed:
         msg = f"TASK-{task_id}「{title}」审核通过 ✅"
-        if name:
-            _notify_via_foxcomms(to=name, message=msg, sender="黑狐", msg_type="通知", wake=False)
-        _notify_via_foxcomms(to="花火", message=msg, sender="黑狐", msg_type="通知", wake=False)
+        if assignee_id:
+            _notify_via_messages_api("black_fox", assignee_id, msg, ref_task_id=task_id)
+        _notify_via_messages_api("black_fox", "fox_leader", msg, ref_task_id=task_id)
     else:
         msg = f"TASK-{task_id}「{title}」审核打回 ❌ 原因：{reason}"
-        if name:
-            _notify_via_foxcomms(to=name, message=msg, sender="黑狐", msg_type="通知", wake=True)
+        if assignee_id:
+            _notify_via_messages_api("black_fox", assignee_id, msg, ref_task_id=task_id, priority="high")
 
 
 def _append_archive_record(project_id: str, task_row, phase_label: str, operator_id: str, note: str = None):
@@ -411,6 +414,35 @@ def create_task(payload: TaskCreate):
     return task
 
 
+@router.get("/archived", response_model=List[dict])
+def list_archived_tasks(
+    project_id: str = None,
+    phase_id: str = None,
+    archive_phase: str = None,
+):
+    """
+    查询已归档任务，支持按 project_id / phase_id / archive_phase 过滤。
+    """
+    conn = get_conn()
+    cursor = conn.cursor()
+    query = "SELECT * FROM tasks WHERE archived_at IS NOT NULL"
+    params = []
+    if project_id:
+        query += " AND project_id = ?"
+        params.append(project_id)
+    if phase_id:
+        query += " AND phase_id = ?"
+        params.append(phase_id)
+    if archive_phase:
+        query += " AND archive_phase = ?"
+        params.append(archive_phase)
+    query += " ORDER BY archived_at DESC"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 @router.get("/{task_id}")
 def get_task(task_id: str, with_context: bool = False):
     """
@@ -566,6 +598,15 @@ def archive_task(task_id: str, payload: TaskArchiveRequest):
         conn.close()
         raise HTTPException(status_code=400, detail="只有 DONE 任务才能归档")
 
+    # 自动从 phase_id 解析 phase name 作为 archive_phase
+    phase_label = payload.phase_label
+    phase_id = row["phase_id"]
+    if phase_id:
+        cursor.execute("SELECT name FROM phases WHERE id = ?", (phase_id,))
+        phase_row = cursor.fetchone()
+        if phase_row:
+            phase_label = phase_row["name"].upper()
+
     now = datetime.utcnow().isoformat()
     cursor.execute(
         """
@@ -573,21 +614,21 @@ def archive_task(task_id: str, payload: TaskArchiveRequest):
         SET archived_at = ?, archive_phase = ?, archive_note = ?, updated_at = ?
         WHERE id = ?
         """,
-        (now, payload.phase_label.upper(), payload.note, now, task_id),
+        (now, phase_label.upper(), payload.note, now, task_id),
     )
     conn.commit()
     cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
     updated = cursor.fetchone()
     conn.close()
 
-    _append_archive_record(updated["project_id"], updated, payload.phase_label, payload.operator_id, payload.note)
+    _append_archive_record(updated["project_id"], updated, phase_label, payload.operator_id, payload.note)
     event_bus.task_updated(
         task_id=task_id,
         project_id=updated["project_id"],
         actor_id=payload.operator_id,
-        changes={"archived_at": now, "archive_phase": payload.phase_label.upper()},
+        changes={"archived_at": now, "archive_phase": phase_label.upper()},
     )
-    return {"ok": True, "archived": task_id, "phase": payload.phase_label.upper(), "message": "任务已归档"}
+    return {"ok": True, "archived": task_id, "phase": phase_label.upper(), "message": "任务已归档"}
 
 
 # ---- Task Lifecycle Endpoints ----
@@ -872,6 +913,108 @@ def get_task_logs(task_id: str, limit: int = 20):
     logs = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return logs
+
+
+@router.get("/{task_id}/review-chain")
+def get_review_chain(task_id: str):
+    """
+    获取任务的验收链状态。
+    返回任务当前所处阶段、已执行的动作历史、以及下一步审核节点。
+
+    验收链阶段：
+    - created: 任务创建
+    - claimed: 已被领取（DOING）
+    - submitted: 已提交审核（REVIEW）
+    - reviewed: 黑狐审核完成
+    - confirmed: 花火确认完成（DONE）
+    """
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 获取日志
+    cursor.execute("""
+        SELECT id, agent_id, event_type, message, created_at
+        FROM task_logs
+        WHERE task_id = ?
+        ORDER BY created_at ASC
+    """, (task_id,))
+    log_rows = cursor.fetchall()
+
+    task_status = row["status"]
+    assignee_id = row["assignee_id"]
+
+    # 验收链节点定义
+    chain_stages = [
+        {"stage": "created", "label": "任务创建", "status": "done"},
+        {"stage": "claimed", "label": "已领取执行", "status": "done"},
+        {"stage": "submitted", "label": "已提交审核", "status": "done"},
+        {"stage": "reviewed", "label": "黑狐审核", "status": "pending"},
+        {"stage": "confirmed", "label": "花火确认", "status": "pending"},
+    ]
+
+    # 收集已完成的 event_type
+    completed_events = {r["event_type"] for r in log_rows}
+    reject_count = sum(1 for r in log_rows if r["event_type"] == "task_review_failed")
+    review_pass_count = sum(1 for r in log_rows if r["event_type"] == "task_review_passed")
+
+    # 根据任务状态和日志确定各阶段
+    if "task_claimed" in completed_events or task_status in ("DOING", "REVIEW", "DONE"):
+        chain_stages[1]["status"] = "done"
+    if "task_submitted" in completed_events or task_status in ("REVIEW", "DONE"):
+        chain_stages[2]["status"] = "done"
+    if review_pass_count > 0:
+        chain_stages[3]["status"] = "done"
+    if task_status == "DONE":
+        chain_stages[4]["status"] = "done"
+
+    # 如果被打回过，需要重新提交
+    if reject_count > 0 and task_status == "DOING":
+        chain_stages[2]["status"] = "pending"
+        chain_stages[3]["status"] = "pending"
+
+    # 下一步
+    next_stage = None
+    for s in chain_stages:
+        if s["status"] == "pending":
+            next_stage = s["stage"]
+            break
+
+    # 审核历史（格式化）
+    review_history = []
+    for log in log_rows:
+        if log["event_type"] in ("task_submitted", "task_review_passed", "task_review_failed"):
+            review_history.append({
+                "agent_id": log["agent_id"],
+                "action": log["event_type"].replace("task_", ""),
+                "message": log["message"],
+                "at": log["created_at"],
+            })
+
+    # 当前审核节点
+    current_reviewer = None
+    if task_status == "REVIEW":
+        current_reviewer = "black_fox"
+    elif task_status == "DONE":
+        current_reviewer = "fox_leader"
+
+    conn.close()
+
+    return {
+        "task_id": task_id,
+        "task_title": row["title"],
+        "task_status": task_status,
+        "assignee_id": assignee_id,
+        "current_reviewer": current_reviewer,
+        "next_stage": next_stage,
+        "reject_count": reject_count,
+        "chain_stages": chain_stages,
+        "review_history": review_history,
+    }
 
 
 @router.post("/bulk", response_model=TaskBulkResponse)

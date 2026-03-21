@@ -33,6 +33,12 @@ class ProjectStatus(str, Enum):
     active = "active"
     archived = "archived"
 
+class PhaseStatus(str, Enum):
+    planning = "planning"
+    active = "active"
+    completed = "completed"
+    cancelled = "cancelled"
+
 class EventType(str, Enum):
     task_created = "task_created"
     task_updated = "task_updated"
@@ -91,6 +97,42 @@ class Project(BaseModel):
     created_at: str
     updated_at: str
 
+# ---- Phase ----
+class PhaseCreate(BaseModel):
+    id: str = Field(..., description="Phase ID，如 phase-9")
+    project_id: str = Field(..., description="所属项目 ID")
+    name: str = Field(..., description="Phase 名称，如 Phase 9")
+    version: Optional[str] = Field(None, description="版本号，如 v0.8.0")
+    description: Optional[str] = Field(None, description="Phase 目标描述")
+    status: PhaseStatus = PhaseStatus.planning
+    goals: Optional[str] = Field(None, description="目标列表 JSON 字符串")
+
+class PhaseUpdate(BaseModel):
+    name: Optional[str] = None
+    version: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[PhaseStatus] = None
+    goals: Optional[str] = None
+    summary: Optional[str] = None
+
+class Phase(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    version: Optional[str] = None
+    description: Optional[str] = None
+    status: PhaseStatus = PhaseStatus.planning
+    goals: Optional[str] = None
+    summary: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+    # 聚合字段（API 返回时动态计算）
+    task_count: int = 0
+    done_count: int = 0
+    archived_count: int = 0
+
 # ---- Task ----
 class TaskCreate(BaseModel):
     id: str
@@ -102,6 +144,7 @@ class TaskCreate(BaseModel):
     project_id: Optional[str] = None
     tags: Optional[str] = None
     depends_on: Optional[str] = None  # 逗号分隔的任务ID列表
+    phase_id: Optional[str] = None
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -112,6 +155,7 @@ class TaskUpdate(BaseModel):
     project_id: Optional[str] = None
     tags: Optional[str] = None
     depends_on: Optional[str] = None
+    phase_id: Optional[str] = None
 
 class Task(BaseModel):
     id: str
@@ -124,6 +168,7 @@ class Task(BaseModel):
     tags: Optional[str] = None
     started_at: Optional[str] = None   # DOING 任务的开始时间
     depends_on: Optional[str] = None   # 逗号分隔的依赖任务ID
+    phase_id: Optional[str] = None
     created_at: str
     updated_at: str
     completed_at: Optional[str] = None
