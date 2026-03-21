@@ -294,6 +294,9 @@ function preload() {
     updateLoadingProgress();
   });
 
+  this.load.on('loaderror', (file) => {
+    console.warn('[Phaser] Failed to load:', file.key, file.url);
+  });
   this.load.on('complete', () => {
     hideLoadingOverlay();
   });
@@ -324,10 +327,11 @@ function preload() {
   this.load.spritesheet('spark_think', '/sprites/spark_think.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
 
   // 四狐多角色：加载其它三只狐狸的spritesheet
-  this.load.spritesheet('qingfox_idle', '/sprites/qingfox_idle.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('whitefox_idle', '/sprites/whitefox_idle.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('blackfox_idle', '/sprites/blackfox_idle.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('fox_bluefox', '/sprites/fox_bluefox.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
+  // 四狐 spritesheet 均为 256x64（4帧×64px）
+  this.load.spritesheet('qingfox_idle', '/sprites/qingfox_idle_4f.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('whitefox_idle', '/sprites/whitefox_idle_4f.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('blackfox_idle', '/sprites/blackfox_idle_4f.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('fox_bluefox', '/sprites/fox_bluefox.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
 
   // 新办公桌：强制 PNG（透明）
   this.load.image('desk_v2', '/static/desk-v2.png');
@@ -336,37 +340,50 @@ function preload() {
 
 function create() {
   game = this;
+  const _t = (k) => this.textures.exists(k);
   this.add.image(640, 360, 'office_bg');
 
   // === 沙发（来自 LAYOUT）===
-  sofa = this.add.sprite(
-    LAYOUT.furniture.sofa.x,
-    LAYOUT.furniture.sofa.y,
-    'sofa_busy'
-  ).setOrigin(LAYOUT.furniture.sofa.origin.x, LAYOUT.furniture.sofa.origin.y);
-  sofa.setDepth(LAYOUT.furniture.sofa.depth);
-
-  this.anims.create({
-    key: 'sofa_busy',
-    frames: this.anims.generateFrameNumbers('sofa_busy', { start: 0, end: 47 }),
-    frameRate: 12,
-    repeat: -1
-  });
+  if (_t('sofa_busy')) {
+    sofa = this.add.sprite(
+      LAYOUT.furniture.sofa.x,
+      LAYOUT.furniture.sofa.y,
+      'sofa_busy'
+    ).setOrigin(LAYOUT.furniture.sofa.origin.x, LAYOUT.furniture.sofa.origin.y);
+    sofa.setDepth(LAYOUT.furniture.sofa.depth);
+    this.anims.create({
+      key: 'sofa_busy',
+      frames: this.anims.generateFrameNumbers('sofa_busy', { start: 0, end: 47 }),
+      frameRate: 12,
+      repeat: -1
+    });
+  } else if (_t('sofa_idle')) {
+    sofa = this.add.image(
+      LAYOUT.furniture.sofa.x,
+      LAYOUT.furniture.sofa.y,
+      'sofa_idle'
+    ).setOrigin(LAYOUT.furniture.sofa.origin.x, LAYOUT.furniture.sofa.origin.y);
+    sofa.setDepth(LAYOUT.furniture.sofa.depth);
+  }
 
   areas = LAYOUT.areas;
 
-  this.anims.create({
-    key: 'star_idle',
-    frames: this.anims.generateFrameNumbers('star_idle', { start: 0, end: 29 }),
-    frameRate: 12,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'star_researching',
-    frames: this.anims.generateFrameNumbers('star_researching', { start: 0, end: 95 }),
-    frameRate: 12,
-    repeat: -1
-  });
+  if (_t('star_idle')) {
+    this.anims.create({
+      key: 'star_idle',
+      frames: this.anims.generateFrameNumbers('star_idle', { start: 0, end: 29 }),
+      frameRate: 12,
+      repeat: -1
+    });
+  }
+  if (_t('star_researching')) {
+    this.anims.create({
+      key: 'star_researching',
+      frames: this.anims.generateFrameNumbers('star_researching', { start: 0, end: 95 }),
+      frameRate: 12,
+      repeat: -1
+    });
+  }
 
   // 花火像素小人：先接 idle / wave / wiggle / think 四套动画
   this.anims.create({

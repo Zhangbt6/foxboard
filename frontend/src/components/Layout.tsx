@@ -79,7 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           fontSize: 11,
           color: '#475569',
         }}>
-          v0.6.0 · Phase 6
+          v0.8.0 · Phase 9
         </div>
       </nav>
 

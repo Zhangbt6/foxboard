@@ -136,6 +136,9 @@ const OFFICE_LAYOUT = {
   totalAssets: 4 * 5 + 15  // 4角色×5动画 + 共享资源
 };
 
+// game.js 使用 LAYOUT 变量名
+const LAYOUT = OFFICE_LAYOUT;
+
 // 兼容导出
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = OFFICE_LAYOUT;
