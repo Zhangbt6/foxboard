@@ -854,6 +854,26 @@ def reject_task(task_id: str, payload: TaskRejectRequest):
     return TaskOperationResponse(ok=True, task=task, message=f"任务已打回：{payload.reason}")
 
 
+@router.get("/{task_id}/logs")
+def get_task_logs(task_id: str, limit: int = 20):
+    """
+    查询任务日志（包括审核打回原因、状态变更等）。
+    青狐/白狐可通过此接口了解被打回的原因。
+    """
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, task_id, agent_id, event_type, message, created_at
+        FROM task_logs
+        WHERE task_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (task_id, limit))
+    logs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return logs
+
+
 @router.post("/bulk", response_model=TaskBulkResponse)
 def bulk_create_tasks(payload: TaskBulkCreateRequest):
     """

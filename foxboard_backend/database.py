@@ -153,6 +153,54 @@ def migrate_add_columns():
     conn.commit()
     conn.close()
 
+
+def migrate_add_messages_and_reports():
+    """v0.6.0 迁移：新增 messages 和 reports 表（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # messages 表 — agent 间通信
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_agent TEXT NOT NULL,
+            to_agent TEXT NOT NULL,
+            subject TEXT,
+            body TEXT NOT NULL,
+            priority TEXT NOT NULL DEFAULT 'normal',
+            ref_task_id TEXT,
+            ref_project_id TEXT,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            read_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    # 收件箱查询索引
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_agent, is_read, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_from ON messages(from_agent, created_at)")
+
+    # reports 表 — cron/agent 工作报告
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id TEXT NOT NULL,
+            report_type TEXT NOT NULL DEFAULT 'cron_summary',
+            session_id TEXT,
+            summary TEXT NOT NULL,
+            details TEXT,
+            task_ids TEXT,
+            project_id TEXT,
+            status TEXT NOT NULL DEFAULT 'submitted',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reports_agent ON reports(agent_id, created_at)")
+
+    conn.commit()
+    conn.close()
+    print("[DB] 迁移：messages + reports 表就绪")
+
+
 if __name__ == "__main__":
     init_db()
     migrate_add_columns()

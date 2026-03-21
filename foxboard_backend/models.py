@@ -257,3 +257,63 @@ class TaskBulkResponse(BaseModel):
     ok: bool
     created: List[Task]
     failed: List[dict] = Field(default_factory=list, description="创建失败的任务及错误原因")
+
+
+# ---- Messages (Agent 间通信) ----
+class MessagePriority(str, Enum):
+    low = "low"
+    normal = "normal"
+    high = "high"
+    urgent = "urgent"
+
+class MessageSend(BaseModel):
+    from_agent: str = Field(..., description="发送者 agent ID")
+    to_agent: str = Field(..., description="接收者 agent ID")
+    subject: Optional[str] = Field(None, description="消息主题")
+    body: str = Field(..., description="消息正文")
+    priority: MessagePriority = MessagePriority.normal
+    ref_task_id: Optional[str] = Field(None, description="关联任务 ID")
+    ref_project_id: Optional[str] = Field(None, description="关联项目 ID")
+
+class Message(BaseModel):
+    id: int
+    from_agent: str
+    to_agent: str
+    subject: Optional[str]
+    body: str
+    priority: MessagePriority
+    ref_task_id: Optional[str]
+    ref_project_id: Optional[str]
+    is_read: bool
+    read_at: Optional[str]
+    created_at: str
+
+
+# ---- Reports (工作报告) ----
+class ReportType(str, Enum):
+    cron_summary = "cron_summary"
+    review_report = "review_report"
+    dev_report = "dev_report"
+    incident = "incident"
+    custom = "custom"
+
+class ReportSubmit(BaseModel):
+    agent_id: str = Field(..., description="提交者 agent ID")
+    report_type: ReportType = ReportType.cron_summary
+    session_id: Optional[str] = Field(None, description="来源 session ID")
+    summary: str = Field(..., description="报告摘要（≤500字）")
+    details: Optional[str] = Field(None, description="详细内容")
+    task_ids: Optional[str] = Field(None, description="相关任务 ID（逗号分隔）")
+    project_id: Optional[str] = Field(None, description="关联项目 ID")
+
+class Report(BaseModel):
+    id: int
+    agent_id: str
+    report_type: ReportType
+    session_id: Optional[str]
+    summary: str
+    details: Optional[str]
+    task_ids: Optional[str]
+    project_id: Optional[str]
+    status: str
+    created_at: str
