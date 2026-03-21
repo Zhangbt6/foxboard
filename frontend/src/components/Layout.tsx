@@ -1,8 +1,10 @@
-import { LayoutDashboard, Kanban, Users, GitBranch, Activity, ListTodo, Grid } from 'lucide-react';
+import { LayoutDashboard, Kanban, Users, GitBranch, Activity, ListTodo, Grid, Folder } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import ProjectSelector from './ProjectSelector';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/projects', icon: Folder, label: '项目列表' },
   { to: '/kanban', icon: Kanban, label: '看板' },
   { to: '/agents', icon: Users, label: '成员状态' },
   { to: '/workflow', icon: GitBranch, label: '流程图' },
@@ -26,16 +28,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         flexDirection: 'column',
         gap: 8,
       }}>
-        {/* Logo */}
-        <div style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: 'var(--foxboard-purple)',
-          marginBottom: 32,
-          padding: '0 8px',
-          letterSpacing: '0.05em',
-        }}>
-          🦊 FoxBoard
+        {/* Logo + 项目选择器 */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{
+            fontSize: 20,
+            fontWeight: 700,
+            color: 'var(--foxboard-purple)',
+            padding: '0 8px',
+            letterSpacing: '0.05em',
+            marginBottom: 12,
+          }}>
+            🦊 FoxBoard
+          </div>
+          <div style={{ padding: '0 8px' }}>
+            <ProjectSelector />
+          </div>
         </div>
 
         {/* Nav items */}
@@ -72,7 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           fontSize: 11,
           color: '#475569',
         }}>
-          v0.3.0 · Phase 3
+          v0.6.0 · Phase 6
         </div>
       </nav>
 

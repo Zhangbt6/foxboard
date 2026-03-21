@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getKanban, getEvents } from '../api/client';
-import { useInterval } from '../hooks/useInterval';
+import { useWebSocket, type WSStatus } from '../hooks/useWebSocket';
 
 interface KanbanData {
   columns: { status: string; tasks: Task[] }[];
@@ -25,13 +25,38 @@ interface FoxEvent {
   created_at: string;
 }
 
+function WSStatusDot({ status }: { status: WSStatus }) {
+  const colors: Record<WSStatus, string> = {
+    connected: '#4ade80',
+    connecting: '#f59e0b',
+    reconnecting: '#f97316',
+    disconnected: '#64748b',
+  };
+  const labels: Record<WSStatus, string> = {
+    connected: '实时在线',
+    connecting: '连接中',
+    reconnecting: '重连中',
+    disconnected: '离线(轮询)',
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: colors[status] }}>
+      <div style={{
+        width: 8, height: 8, borderRadius: '50%',
+        background: colors[status],
+        boxShadow: `0 0 6px ${colors[status]}`,
+      }} />
+      {labels[status]}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [kanban, setKanban] = useState<KanbanData | null>(null);
   const [events, setEvents] = useState<FoxEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const load = useCallback(() => {
+  const refresh = useCallback(() => {
     Promise.all([
       getKanban().then(r => setKanban(r.data)),
       getEvents({ limit: 30 }).then(r => setEvents(r.data)),
@@ -39,8 +64,19 @@ export default function Dashboard() {
     setLastUpdated(new Date());
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-  useInterval(load, 30000);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // WebSocket 实时推送（替代轮询）
+  const { status: wsStatus } = useWebSocket({
+    onMessage: (msg) => {
+      const event = msg.event as string;
+      if (event === 'task_update' || event === 'activity_log' || event === 'agent_heartbeat') {
+        // 有相关事件时静默刷新数据
+        refresh();
+      }
+    },
+    maxReconnects: 5,
+  });
 
   const allTasks = kanban?.columns.flatMap(c => c.tasks) ?? [];
   const doneTasks = allTasks.filter(t => t.status === 'DONE').length;
@@ -48,21 +84,21 @@ export default function Dashboard() {
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
   const blockedTasks = allTasks.filter(t => t.status === 'BLOCKED');
 
-  // 超时事件（来自 events 表）
   const timeoutEvents = events.filter(e => e.event_type === 'task_timeout');
-
-  // REVIEW 待审核
   const reviewEvents = events.filter(e => e.event_type === 'task_review_requested');
 
   return (
     <div style={{ padding: 32 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>Dashboard</h1>
-        {lastUpdated && (
-          <span style={{ fontSize: 11, color: '#475569' }}>
-            ⟳ {lastUpdated.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <WSStatusDot status={wsStatus} />
+          {lastUpdated && (
+            <span style={{ fontSize: 11, color: '#475569' }}>
+              ⟳ {lastUpdated.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          )}
+        </div>
       </div>
 
       {loading && !kanban && <div style={{ color: '#94a3b8', padding: 32 }}>加载中...</div>}
@@ -102,7 +138,7 @@ export default function Dashboard() {
           <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>⏱️ 超时任务</div>
           <div style={{ fontSize: 36, fontWeight: 700, color: timeoutEvents.length > 0 ? '#ef4444' : '#4ade80' }}>{timeoutEvents.length}</div>
           <div style={{ color: '#64748b', fontSize: 12, marginTop: 8 }}>
-            {timeoutEvents.length === 0 ? '无超时' : timeoutEvents.slice(0,2).map(e => e.message || '超时').join(', ')}
+            {timeoutEvents.length === 0 ? '无超时' : timeoutEvents.slice(0, 2).map(e => e.message || '超时').join(', ')}
           </div>
         </div>
       </div>
@@ -155,9 +191,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 今日动态 */}
+      {/* 事件流 */}
       <div style={{ background: 'var(--foxboard-surface)', border: '1px solid var(--foxboard-border)', borderRadius: 12, padding: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>📋 事件流</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>📋 事件流 {wsStatus === 'connected' && <span style={{ fontSize: 11, color: '#4ade80', marginLeft: 8 }}>● 实时推送</span>}</h2>
         {events.length === 0 ? (
           <div style={{ color: '#475569', fontSize: 13 }}>暂无事件记录</div>
         ) : (

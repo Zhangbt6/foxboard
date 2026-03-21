@@ -63,3 +63,16 @@ export const updateWorkflowNode = (workflowId: number, nodeId: string, updates: 
   api.patch(`/workflows/${workflowId}/nodes/${nodeId}`, updates);
 
 export default api;
+
+// ---- Projects ----
+export const getProjects = () => api.get('/projects/');
+
+export const getProject = (id: string) => api.get(`/projects/${id}`);
+
+export const createProject = (data: { id: string; name: string; description?: string; owner?: string }) =>
+  api.post('/projects/', data);
+
+export const updateProject = (id: string, data: Record<string, unknown>) =>
+  api.patch(`/projects/${id}`, data);
+
+export const deleteProject = (id: string) => api.delete(`/projects/${id}`);

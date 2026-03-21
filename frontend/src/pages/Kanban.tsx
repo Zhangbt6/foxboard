@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getKanban, updateTask } from '../api/client';
-import { useInterval } from '../hooks/useInterval';
+import { useWebSocket, type WSStatus } from '../hooks/useWebSocket';
 
 interface Task {
   id: string;
@@ -31,6 +31,22 @@ const NEXT_STATUS: Record<string, string> = {
   REVIEW: 'DONE',
 };
 
+function WSStatusDot({ status }: { status: WSStatus }) {
+  const colors: Record<WSStatus, string> = {
+    connected: '#4ade80',
+    connecting: '#f59e0b',
+    reconnecting: '#f97316',
+    disconnected: '#64748b',
+  };
+  return (
+    <div style={{
+      width: 8, height: 8, borderRadius: '50%',
+      background: colors[status],
+      boxShadow: `0 0 6px ${colors[status]}`,
+    }} />
+  );
+}
+
 export default function Kanban() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,11 +62,17 @@ export default function Kanban() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 首次加载
   useEffect(() => { load(); }, [load]);
 
-  // 每 20 秒自动刷新（实时拉取）
-  useInterval(load, 20000);
+  // WebSocket 实时推送（替代轮询）
+  useWebSocket({
+    onMessage: (msg) => {
+      if (msg.event === 'task_update') {
+        load();
+      }
+    },
+    maxReconnects: 5,
+  });
 
   const advanceTask = async (task: Task) => {
     const next = NEXT_STATUS[task.status];
@@ -68,10 +90,10 @@ export default function Kanban() {
 
   return (
     <div style={{ padding: 32 }}>
-      {/* 页面头部 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>任务看板</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <WSStatusDot status="connected" />
           {lastUpdated && (
             <span style={{ fontSize: 11, color: '#475569' }}>
               ⟳ {lastUpdated.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -103,7 +125,6 @@ export default function Kanban() {
           const meta = STATUS_META[col.status] ?? { label: col.status, color: '#94a3b8', bg: '#1e293b' };
           return (
             <div key={col.status}>
-              {/* 列头 */}
               <div style={{
                 padding: '12px 16px',
                 borderRadius: '8px 8px 0 0',
@@ -123,7 +144,6 @@ export default function Kanban() {
                 </div>
               </div>
 
-              {/* 卡片列表 */}
               <div style={{
                 background: '#111827',
                 borderRadius: '0 0 8px 8px',

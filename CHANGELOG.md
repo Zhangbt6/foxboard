@@ -5,6 +5,12 @@ All notable changes to **FoxBoard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-21
+
+### Added
+- **WebSocket 实时推送（前端）** (TASK-FB-033): `useWebSocket` hook 实现自动重连、心跳保活、状态指示；Dashboard / Kanban 接入实时推送，移除轮询
+- **多项目前端页面** (TASK-FB-035): `/projects` 项目列表页 + `ProjectSelector` 全局切换器 + `ProjectContext` 上下文
+
 ## [0.5.0] - 2026-03-21
 
 ### Added
