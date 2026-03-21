@@ -189,6 +189,7 @@ def generate_board_md(project_id: str, project_board_path: Path) -> str:
     # 生成 BOARD.md 头部
     header = (
         "# BOARD.md - FoxBoard 任务看板\n\n"
+        "> **项目**: %s\n"
         "> **唯一的任务调度中心**。花火写入任务，执行人读取并推进。\n"
         "> 更新日期：%s | 由 board_renderer.py 自动投影\n\n"
         "---\n\n"
@@ -214,7 +215,7 @@ def generate_board_md(project_id: str, project_board_path: Path) -> str:
         "### 归档规则\n"
         "Phase 完成后任务卡移入 `tasks/archive/phaseN/`，"
         "BOARD.md 只保留归档索引。\n\n---\n"
-    ) % now
+    ) % (project_id, now)
 
     lines: List[str] = [header]
 

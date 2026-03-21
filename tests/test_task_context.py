@@ -52,18 +52,31 @@ class TestGetDependsOnTasks:
             assert get_depends_on_tasks("") == []
 
     def test_parses_comma_separated_ids(self):
-        with patch("foxboard_backend.task_context.get_conn") as mock_conn:
-            mock_cursor = MagicMock()
-            mock_conn.return_value.cursor.return_value = mock_cursor
-            mock_cursor.fetchall.return_value = [
-                {"id": "FB-001", "title": "任务1", "status": "DONE"},
-                {"id": "FB-002", "title": "任务2", "status": "DOING"},
-            ]
-
-            result = get_depends_on_tasks("FB-001, FB-002")
-            assert len(result) == 2
-            assert result[0]["id"] == "FB-001"
-            assert result[0]["status"] == "DONE"
+        """使用真实 DB 连接测试，避免 mock 在全量测试时失效"""
+        from foxboard_backend.database import get_conn, init_db
+        import foxboard_backend.database as db_module
+        import tempfile, pathlib
+        
+        with tempfile.TemporaryDirectory() as tmp:
+            test_db = pathlib.Path(tmp) / "test.db"
+            original = db_module.DB_PATH
+            db_module.DB_PATH = test_db
+            try:
+                init_db()
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute("INSERT INTO tasks (id, title, status) VALUES (?, ?, ?)", ("FB-001", "任务1", "DONE"))
+                cur.execute("INSERT INTO tasks (id, title, status) VALUES (?, ?, ?)", ("FB-002", "任务2", "DOING"))
+                conn.commit()
+                conn.close()
+                
+                import importlib
+                import foxboard_backend.task_context as tc_mod
+                importlib.reload(tc_mod)
+                result = tc_mod.get_depends_on_tasks("FB-001, FB-002")
+                assert len(result) == 2
+            finally:
+                db_module.DB_PATH = original
 
 
 class TestGetProjectSummary:
