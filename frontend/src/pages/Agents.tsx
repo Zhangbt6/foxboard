@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getAgents, getTasks } from '../api/client';
-import { useInterval } from '../hooks/useInterval';
+import { useWebSocket, type WSStatus } from '../hooks/useWebSocket';
 
 interface Agent {
   id: string;
@@ -52,6 +52,31 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
+function WSStatusDot({ status }: { status: WSStatus }) {
+  const colors: Record<WSStatus, string> = {
+    connected: '#4ade80',
+    connecting: '#f59e0b',
+    reconnecting: '#f97316',
+    disconnected: '#64748b',
+  };
+  const labels: Record<WSStatus, string> = {
+    connected: '实时在线',
+    connecting: '连接中',
+    reconnecting: '重连中',
+    disconnected: '离线(轮询)',
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: colors[status] }}>
+      <div style={{
+        width: 8, height: 8, borderRadius: '50%',
+        background: colors[status],
+        boxShadow: `0 0 6px ${colors[status]}`,
+      }} />
+      {labels[status]}
+    </div>
+  );
+}
+
 export default function Agents() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -68,8 +93,16 @@ export default function Agents() {
 
   useEffect(() => { load(); }, [load]);
 
-  // 每 10 秒刷新成员状态（实时心跳）
-  useInterval(load, 10000);
+  // WebSocket 实时推送（替代轮询）
+  const { status: wsStatus } = useWebSocket({
+    onMessage: (msg) => {
+      const event = msg.event as string;
+      if (event === 'agent_heartbeat' || event === 'task_update' || event === 'activity_log') {
+        load();
+      }
+    },
+    maxReconnects: 5,
+  });
 
   const getTaskTitle = (taskId?: string) => tasks.find(t => t.id === taskId)?.title ?? '—';
 
@@ -90,12 +123,12 @@ export default function Agents() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>成员状态 <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>（点击成员卡片进入「我的任务」视图）</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <WSStatusDot status={wsStatus} />
           {lastUpdated && (
             <span style={{ fontSize: 11, color: '#475569' }}>
               ⟳ {lastUpdated.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           )}
-          <span style={{ fontSize: 11, color: '#475569' }}>每 10 秒自动刷新</span>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getKanban, updateTask } from '../api/client';
 import { useWebSocket, type WSStatus } from '../hooks/useWebSocket';
+import { useProject } from '../contexts/ProjectContext';
 
 interface Task {
   id: string;
@@ -48,24 +49,25 @@ function WSStatusDot({ status }: { status: WSStatus }) {
 }
 
 export default function Kanban() {
+  const { projectId } = useProject();
   const [columns, setColumns] = useState<Column[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(() => {
-    getKanban()
+    getKanban(projectId ?? undefined)
       .then(r => {
         setColumns(r.data.columns);
         setLastUpdated(new Date());
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
 
   // WebSocket 实时推送（替代轮询）
-  useWebSocket({
+  const { status: wsStatus } = useWebSocket({
     onMessage: (msg) => {
       if (msg.event === 'task_update') {
         load();
@@ -93,7 +95,7 @@ export default function Kanban() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>任务看板</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <WSStatusDot status="connected" />
+          <WSStatusDot status={wsStatus} />
           {lastUpdated && (
             <span style={{ fontSize: 11, color: '#475569' }}>
               ⟳ {lastUpdated.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

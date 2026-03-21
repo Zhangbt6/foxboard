@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getKanban, getEvents } from '../api/client';
 import { useWebSocket, type WSStatus } from '../hooks/useWebSocket';
+import { useProject } from '../contexts/ProjectContext';
 
 interface KanbanData {
   columns: { status: string; tasks: Task[] }[];
@@ -51,6 +52,7 @@ function WSStatusDot({ status }: { status: WSStatus }) {
 }
 
 export default function Dashboard() {
+  const { projectId } = useProject();
   const [kanban, setKanban] = useState<KanbanData | null>(null);
   const [events, setEvents] = useState<FoxEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,11 +60,11 @@ export default function Dashboard() {
 
   const refresh = useCallback(() => {
     Promise.all([
-      getKanban().then(r => setKanban(r.data)),
+      getKanban(projectId ?? undefined).then(r => setKanban(r.data)),
       getEvents({ limit: 30 }).then(r => setEvents(r.data)),
     ]).catch(() => {}).finally(() => setLoading(false));
     setLastUpdated(new Date());
-  }, []);
+  }, [projectId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
