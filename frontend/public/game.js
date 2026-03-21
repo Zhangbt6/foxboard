@@ -323,6 +323,12 @@ function preload() {
   this.load.spritesheet('spark_wiggle', '/sprites/spark_wiggle.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
   this.load.spritesheet('spark_think', '/sprites/spark_think.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
 
+  // 四狐多角色：加载其它三只狐狸的spritesheet
+  this.load.spritesheet('qingfox_idle', '/sprites/qingfox_idle.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('whitefox_idle', '/sprites/whitefox_idle.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('blackfox_idle', '/sprites/blackfox_idle.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('fox_bluefox', '/sprites/fox_bluefox.webp?v=20260322', { frameWidth: 64, frameHeight: 64 });
+
   // 新办公桌：强制 PNG（透明）
   this.load.image('desk_v2', '/static/desk-v2.png');
   this.load.spritesheet('flowers', '/static/flowers-spritesheet' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 65, frameHeight: 65 });
@@ -387,6 +393,61 @@ function create() {
     frameRate: 8,
     repeat: -1
   });
+
+  // === 四狐多角色：其它三只狐狸的动画（当前只有idle，用同一张图）===
+  const foxNames = ['qingfox', 'whitefox', 'blackfox', 'fox_bluefox'];
+  for (const fox of foxNames) {
+    const textureKey = fox + '_idle';
+    if (this.textures.exists(textureKey)) {
+      this.anims.create({
+        key: fox + '_idle_anim',
+        frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 3 }),
+        frameRate: 8,
+        repeat: -1
+      });
+    }
+  }
+
+  // === 四狐多角色：创建四只狐狸的工作站精灵 ===
+  // 如果 OFFICE_LAYOUT 存在（新版四工位），使用它；否则回退到原有 LAYOUT（单工位）
+  const WS = (typeof OFFICE_LAYOUT !== 'undefined') ? OFFICE_LAYOUT.workstations : null;
+
+  // 四只狐狸的工作站 sprite 对象
+  const workstationSprites = {};
+
+  if (WS) {
+    // 新版：四工位模式，从 OFFICE_LAYOUT 读取
+    for (const ws of WS) {
+      const agentId = ws.agentId;
+      // 找第一个可用的 spritesheet
+      let spriteKey = null;
+      const candidates = ws.sprites ? Object.values(ws.sprites) : [];
+      for (const c of candidates) {
+        const tex = c.replace('/sprites/', '').replace('.webp', '').replace('.png', '');
+        if (game.textures.exists(tex)) { spriteKey = tex; break; }
+      }
+      if (!spriteKey) spriteKey = 'spark_idle'; // fallback
+
+      const sp = game.add.sprite(ws.x, ws.y, spriteKey);
+      sp.setOrigin(0.5);
+      sp.setDepth(ws.depth || 900);
+      sp.setVisible(true);
+      sp.anims.play(spriteKey + '_anim', true);
+      workstationSprites[agentId] = sp;
+
+      // 名字标签
+      const nameTag = game.add.text(ws.x, ws.y - 42, ws.label, {
+        fontFamily: 'ArkPixel, monospace',
+        fontSize: '12px',
+        fill: '#ffffff',
+        stroke: '#000',
+        strokeThickness: 3
+      }).setOrigin(0.5);
+      nameTag.setDepth(1100);
+      workstationSprites[agentId + '_nameTag'] = nameTag;
+    }
+    window.workstationSprites = workstationSprites;
+  }
 
   star = game.physics.add.sprite(areas.breakroom.x, areas.breakroom.y, 'star_idle');
   star.setOrigin(0.5);
@@ -956,6 +1017,8 @@ function fetchAgents() {
         agent._slotIndex = areaSlots[area] || 0;
         areaSlots[area] = (areaSlots[area] || 0) + 1;
         renderAgent(agent);
+        // 四狐多角色：同时更新工作站精灵
+        updateWorkstationSprites(agent);
       }
       // 移除不再存在的 agent
       const currentIds = new Set(data.map(a => a.agentId));
@@ -979,9 +1042,92 @@ function getAreaPosition(area, slotIndex) {
   return positions[idx];
 }
 
+// 四狐多角色：状态→动画映射
+const FOX_ANIM_MAP = {
+  'idle': '_idle_anim',
+  'TODO': '_idle_anim',
+  'DOING': '_idle_anim',   // working状态暂无，用idle代替
+  'REVIEW': '_idle_anim', // think状态暂无，用idle代替
+  'DONE': '_idle_anim',   // wave状态暂无，用idle代替
+  'writing': '_idle_anim',
+  'researching': '_idle_anim',
+  'executing': '_idle_anim',
+  'syncing': '_idle_anim',
+  'error': '_idle_anim'
+};
+
+function getFoxSpriteKey(agentId) {
+  // agentId → spritesheet key 前缀
+  if (agentId === 'fox_leader') return 'spark';
+  if (agentId === 'qing_fox') return 'qingfox';
+  if (agentId === 'white_fox') return 'whitefox';
+  if (agentId === 'black_fox') return 'blackfox';
+  return null;
+}
+
+function getFoxAnimKey(agentId, state) {
+  const base = getFoxSpriteKey(agentId);
+  if (!base) return null;
+  const suffix = FOX_ANIM_MAP[state] || FOX_ANIM_MAP['idle'];
+  return base + suffix;
+}
+
+function updateWorkstationSprites(agentData) {
+  // 根据 FoxBoard API 返回的 agent 数据更新四狐工作站精灵
+  if (!window.workstationSprites) return;
+  const ws = window.workstationSprites;
+  const agentId = agentData.agentId;
+  const state = agentData.state || 'idle';
+  const status = agentData.current_task_status || state;
+
+  const sp = ws[agentId];
+  if (!sp) return;
+
+  const animKey = getFoxAnimKey(agentId, status);
+  if (!animKey) return;
+
+  const textureKey = animKey.replace('_anim', '');
+  if (game.textures.exists(textureKey)) {
+    if (sp.texture && sp.texture.key !== textureKey) {
+      sp.setTexture(textureKey);
+    }
+    if (sp.anims && sp.anims.currentAnim?.key !== animKey) {
+      sp.anims.play(animKey, true);
+    }
+  }
+
+  // 更新名字标签颜色（根据状态）
+  const nameTag = ws[agentId + '_nameTag'];
+  if (nameTag) {
+    let color = '#ffffff';
+    if (status === 'DOING' || status === 'executing') color = '#fbbf24';
+    else if (status === 'REVIEW' || status === 'researching') color = '#60a5fa';
+    else if (status === 'DONE' || status === 'writing') color = '#4ade80';
+    nameTag.setFill(color);
+  }
+}
+
 function getAgentVisualSpec(agent) {
+  const agentId = agent.agentId || '';
   const name = String(agent.name || '');
   const isHibana = !!agent.isMain || name.includes('花火');
+
+  // 四狐多角色：花火+另外三只狐狸都走 spritesheet 路线
+  const foxKey = getFoxSpriteKey(agentId);
+  if (foxKey) {
+    const state = agent.state || 'idle';
+    const animKey = getFoxAnimKey(agentId, state);
+    const textureKey = animKey ? animKey.replace('_anim', '') : foxKey + '_idle';
+    return {
+      type: 'sprite',
+      texture: textureKey,
+      animKey: animKey,
+      scale: foxKey === 'spark' ? 0.95 : 0.85,
+      y: 4,
+    };
+  }
+
+  // 其它 agent（非四狐）走旧逻辑
   if (!isHibana) return null;
 
   const state = agent.state || 'idle';
