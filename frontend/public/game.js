@@ -28,15 +28,8 @@ function checkWebPSupportFallback() {
 
 // 获取文件扩展名（根据 WebP 支持情况 + 布局配置的 forcePng）
 function getExt(pngFile) {
-  // star-working-spritesheet.png 太宽了，WebP 不支持，始终用 PNG
-  if (pngFile === 'star-working-spritesheet.png') {
-    return '.png';
-  }
-  // 如果布局配置里强制用 PNG，就用 .png
-  if (LAYOUT.forcePng && LAYOUT.forcePng[pngFile.replace(/\.(png|webp)$/, '')]) {
-    return '.png';
-  }
-  return supportsWebP ? '.webp' : '.png';
+  // 大部分 webp 版本不存在，强制 PNG 避免 404
+  return '.png';
 }
 
 const config = {
@@ -302,23 +295,23 @@ function preload() {
   });
 
   this.load.image('office_bg', '/static/office_bg_small' + (supportsWebP ? '.webp' : '.png') + '?v=20260321');
-  this.load.spritesheet('star_idle', '/static/star-idle-spritesheet' + getExt('star-idle-spritesheet.png'), { frameWidth: 128, frameHeight: 128 });
-  this.load.spritesheet('star_researching', '/static/star-researching-spritesheet' + getExt('star-researching-spritesheet.png'), { frameWidth: 128, frameHeight: 105 });
+  this.load.spritesheet('star_idle', '/sprites/spark_idle.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
+  this.load.spritesheet('star_researching', '/sprites/spark_idle.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
 
-  this.load.image('sofa_idle', '/static/sofa-idle' + getExt('sofa-idle.png'));
-  this.load.spritesheet('sofa_busy', '/static/sofa-busy-spritesheet' + getExt('sofa-busy-spritesheet.png'), { frameWidth: 256, frameHeight: 256 });
+  // SKIP: this.load.image('sofa_idle', '/static/sofa-idle' + getExt('sofa-idle.png'));
+  // SKIP: this.load.spritesheet('sofa_busy', '/static/sofa-busy-spritesheet' + getExt('sofa-busy-spritesheet.png'), { frameWidth: 256, frameHeight: 256 });
 
-  this.load.spritesheet('plants', '/static/plants-spritesheet' + getExt('plants-spritesheet.png'), { frameWidth: 160, frameHeight: 160 });
-  this.load.spritesheet('posters', '/static/posters-spritesheet' + getExt('posters-spritesheet.png'), { frameWidth: 160, frameHeight: 160 });
-  this.load.spritesheet('coffee_machine', '/static/coffee-machine-spritesheet' + getExt('coffee-machine-spritesheet.png'), { frameWidth: 230, frameHeight: 230 });
+  // SKIP: this.load.spritesheet('plants', '/static/plants-spritesheet' + getExt('plants-spritesheet.png'), { frameWidth: 160, frameHeight: 160 });
+  // SKIP: this.load.spritesheet('posters', '/static/posters-spritesheet' + getExt('posters-spritesheet.png'), { frameWidth: 160, frameHeight: 160 });
+  // SKIP: this.load.spritesheet('coffee_machine', '/static/coffee-machine-spritesheet' + getExt('coffee-machine-spritesheet.png'), { frameWidth: 230, frameHeight: 230 });
   this.load.spritesheet('serverroom', '/static/serverroom-spritesheet' + getExt('serverroom-spritesheet.png'), { frameWidth: 180, frameHeight: 251 });
 
   this.load.spritesheet('error_bug', '/static/error-bug-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 180, frameHeight: 180 });
   this.load.spritesheet('cats', '/static/cats-spritesheet' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 160, frameHeight: 160 });
-  this.load.image('desk', '/static/desk' + getExt('desk.png'));
+  // SKIP: this.load.image('desk', '/static/desk' + getExt('desk.png'));
   this.load.spritesheet('star_working', '/static/star-working-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 230, frameHeight: 144 });
-  this.load.spritesheet('sync_anim', '/static/sync-animation-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 256, frameHeight: 256 });
-  this.load.image('memo_bg', '/static/memo-bg' + (supportsWebP ? '.webp' : '.png'));
+  // SKIP: this.load.spritesheet('sync_anim', '/static/sync-animation-spritesheet-grid.png', { frameWidth: 256, frameHeight: 256 });
+  // SKIP: this.load.image('memo_bg', '/static/memo-bg.png');
 
   // 花火专属像素动画（主人提供，64x64 x 4帧）
   this.load.spritesheet('spark_idle', '/sprites/spark_idle.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
@@ -335,7 +328,7 @@ function preload() {
 
   // 新办公桌：强制 PNG（透明）
   this.load.image('desk_v2', '/static/desk-v2.png');
-  this.load.spritesheet('flowers', '/static/flowers-spritesheet' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 65, frameHeight: 65 });
+  // SKIP: this.load.spritesheet('flowers', '/static/flowers-spritesheet.png', { frameWidth: 65, frameHeight: 65 });
 }
 
 function create() {
@@ -371,16 +364,16 @@ function create() {
   if (_t('star_idle')) {
     this.anims.create({
       key: 'star_idle',
-      frames: this.anims.generateFrameNumbers('star_idle', { start: 0, end: 29 }),
-      frameRate: 12,
+      frames: this.anims.generateFrameNumbers('star_idle', { start: 0, end: 3 }),
+      frameRate: 6,
       repeat: -1
     });
   }
   if (_t('star_researching')) {
     this.anims.create({
       key: 'star_researching',
-      frames: this.anims.generateFrameNumbers('star_researching', { start: 0, end: 95 }),
-      frameRate: 12,
+      frames: this.anims.generateFrameNumbers('star_researching', { start: 0, end: 3 }),
+      frameRate: 6,
       repeat: -1
     });
   }
@@ -466,15 +459,17 @@ function create() {
     window.workstationSprites = workstationSprites;
   }
 
-  star = game.physics.add.sprite(areas.breakroom.x, areas.breakroom.y, 'star_idle');
-  star.setOrigin(0.5);
-  star.setScale(1.4);
-  star.setAlpha(0.95);
-  star.setDepth(20);
-  star.setVisible(false);
-  star.anims.stop();
+  if (_t('star_idle')) {
+    star = game.physics.add.sprite(areas.breakroom.x, areas.breakroom.y, 'star_idle');
+    star.setOrigin(0.5);
+    star.setScale(1.4);
+    star.setAlpha(0.95);
+    star.setDepth(20);
+    star.setVisible(false);
+    star.anims.stop();
+  }
 
-  if (game.textures.exists('sofa_busy')) {
+  if (sofa && _t('sofa_busy')) {
     sofa.setTexture('sofa_busy');
     sofa.anims.play('sofa_busy', true);
   }
@@ -496,160 +491,182 @@ function create() {
   game.add.text(plaqueX + 190, plaqueY, '⭐', { fontFamily: 'ArkPixel, monospace', fontSize: '20px' }).setOrigin(0.5);
 
   // === 植物们（来自 LAYOUT）===
-  const plantFrameCount = 16;
-  for (let i = 0; i < LAYOUT.furniture.plants.length; i++) {
-    const p = LAYOUT.furniture.plants[i];
-    const randomPlantFrame = Math.floor(Math.random() * plantFrameCount);
-    const plant = game.add.sprite(p.x, p.y, 'plants', randomPlantFrame).setOrigin(0.5);
-    plant.setDepth(p.depth);
-    plant.setInteractive({ useHandCursor: true });
-    window[`plantSprite${i === 0 ? '' : i + 1}`] = plant;
-    plant.on('pointerdown', (() => {
-      const next = Math.floor(Math.random() * plantFrameCount);
-      plant.setFrame(next);
-    }));
+  if (_t('plants')) {
+    const plantFrameCount = 16;
+    for (let i = 0; i < LAYOUT.furniture.plants.length; i++) {
+      const p = LAYOUT.furniture.plants[i];
+      const randomPlantFrame = Math.floor(Math.random() * plantFrameCount);
+      const plant = game.add.sprite(p.x, p.y, 'plants', randomPlantFrame).setOrigin(0.5);
+      plant.setDepth(p.depth);
+      plant.setInteractive({ useHandCursor: true });
+      window[`plantSprite${i === 0 ? '' : i + 1}`] = plant;
+      plant.on('pointerdown', (() => {
+        const next = Math.floor(Math.random() * plantFrameCount);
+        plant.setFrame(next);
+      }));
+    }
   }
 
   // === 海报（来自 LAYOUT）===
-  const postersFrameCount = 32;
-  const randomPosterFrame = Math.floor(Math.random() * postersFrameCount);
-  const poster = game.add.sprite(LAYOUT.furniture.poster.x, LAYOUT.furniture.poster.y, 'posters', randomPosterFrame).setOrigin(0.5);
-  poster.setDepth(LAYOUT.furniture.poster.depth);
-  poster.setInteractive({ useHandCursor: true });
-  window.posterSprite = poster;
-  window.posterFrameCount = postersFrameCount;
-  poster.on('pointerdown', () => {
-    const next = Math.floor(Math.random() * window.posterFrameCount);
-    window.posterSprite.setFrame(next);
-  });
+  if (_t('posters')) {
+    const postersFrameCount = 32;
+    const randomPosterFrame = Math.floor(Math.random() * postersFrameCount);
+    const poster = game.add.sprite(LAYOUT.furniture.poster.x, LAYOUT.furniture.poster.y, 'posters', randomPosterFrame).setOrigin(0.5);
+    poster.setDepth(LAYOUT.furniture.poster.depth);
+    poster.setInteractive({ useHandCursor: true });
+    window.posterSprite = poster;
+    window.posterFrameCount = postersFrameCount;
+    poster.on('pointerdown', () => {
+      const next = Math.floor(Math.random() * window.posterFrameCount);
+      window.posterSprite.setFrame(next);
+    });
+  }
 
   // === 小猫（来自 LAYOUT）===
-  const catsFrameCount = 16;
-  const randomCatFrame = Math.floor(Math.random() * catsFrameCount);
-  const cat = game.add.sprite(LAYOUT.furniture.cat.x, LAYOUT.furniture.cat.y, 'cats', randomCatFrame).setOrigin(LAYOUT.furniture.cat.origin.x, LAYOUT.furniture.cat.origin.y);
-  cat.setDepth(LAYOUT.furniture.cat.depth);
-  cat.setInteractive({ useHandCursor: true });
-  window.catSprite = cat;
-  window.catsFrameCount = catsFrameCount;
-  cat.on('pointerdown', () => {
-    const next = Math.floor(Math.random() * window.catsFrameCount);
-    window.catSprite.setFrame(next);
-  });
+  if (_t('cats')) {
+    const catsFrameCount = 16;
+    const randomCatFrame = Math.floor(Math.random() * catsFrameCount);
+    const cat = game.add.sprite(LAYOUT.furniture.cat.x, LAYOUT.furniture.cat.y, 'cats', randomCatFrame).setOrigin(LAYOUT.furniture.cat.origin.x, LAYOUT.furniture.cat.origin.y);
+    cat.setDepth(LAYOUT.furniture.cat.depth);
+    cat.setInteractive({ useHandCursor: true });
+    window.catSprite = cat;
+    window.catsFrameCount = catsFrameCount;
+    cat.on('pointerdown', () => {
+      const next = Math.floor(Math.random() * window.catsFrameCount);
+      window.catSprite.setFrame(next);
+    });
+  }
 
   // === 咖啡机（来自 LAYOUT）===
-  this.anims.create({
-    key: 'coffee_machine',
-    frames: this.anims.generateFrameNumbers('coffee_machine', { start: 0, end: 95 }),
-    frameRate: 12.5,
-    repeat: -1
-  });
-  const coffeeMachine = this.add.sprite(
-    LAYOUT.furniture.coffeeMachine.x,
-    LAYOUT.furniture.coffeeMachine.y,
-    'coffee_machine'
-  ).setOrigin(LAYOUT.furniture.coffeeMachine.origin.x, LAYOUT.furniture.coffeeMachine.origin.y);
-  coffeeMachine.setDepth(LAYOUT.furniture.coffeeMachine.depth);
-  coffeeMachine.anims.play('coffee_machine', true);
+  if (_t('coffee_machine')) {
+    this.anims.create({
+      key: 'coffee_machine',
+      frames: this.anims.generateFrameNumbers('coffee_machine', { start: 0, end: 95 }),
+      frameRate: 12.5,
+      repeat: -1
+    });
+    const coffeeMachine = this.add.sprite(
+      LAYOUT.furniture.coffeeMachine.x,
+      LAYOUT.furniture.coffeeMachine.y,
+      'coffee_machine'
+    ).setOrigin(LAYOUT.furniture.coffeeMachine.origin.x, LAYOUT.furniture.coffeeMachine.origin.y);
+    coffeeMachine.setDepth(LAYOUT.furniture.coffeeMachine.depth);
+    coffeeMachine.anims.play('coffee_machine', true);
+  }
 
   // === 服务器区（来自 LAYOUT）===
-  this.anims.create({
-    key: 'serverroom_on',
-    frames: this.anims.generateFrameNumbers('serverroom', { start: 0, end: 39 }),
-    frameRate: 6,
-    repeat: -1
-  });
-  serverroom = this.add.sprite(
-    LAYOUT.furniture.serverroom.x,
-    LAYOUT.furniture.serverroom.y,
-    'serverroom',
-    0
-  ).setOrigin(LAYOUT.furniture.serverroom.origin.x, LAYOUT.furniture.serverroom.origin.y);
-  serverroom.setDepth(LAYOUT.furniture.serverroom.depth);
-  serverroom.anims.stop();
-  serverroom.setFrame(0);
+  if (_t('serverroom')) {
+    this.anims.create({
+      key: 'serverroom_on',
+      frames: this.anims.generateFrameNumbers('serverroom', { start: 0, end: 39 }),
+      frameRate: 6,
+      repeat: -1
+    });
+    serverroom = this.add.sprite(
+      LAYOUT.furniture.serverroom.x,
+      LAYOUT.furniture.serverroom.y,
+      'serverroom',
+      0
+    ).setOrigin(LAYOUT.furniture.serverroom.origin.x, LAYOUT.furniture.serverroom.origin.y);
+    serverroom.setDepth(LAYOUT.furniture.serverroom.depth);
+    serverroom.anims.stop();
+    serverroom.setFrame(0);
+  }
 
   // === 新办公桌（来自 LAYOUT，强制透明 PNG）===
-  const desk = this.add.image(
-    LAYOUT.furniture.desk.x,
-    LAYOUT.furniture.desk.y,
-    'desk_v2'
-  ).setOrigin(LAYOUT.furniture.desk.origin.x, LAYOUT.furniture.desk.origin.y);
-  desk.setDepth(LAYOUT.furniture.desk.depth);
+  if (_t('desk_v2')) {
+    const desk = this.add.image(
+      LAYOUT.furniture.desk.x,
+      LAYOUT.furniture.desk.y,
+      'desk_v2'
+    ).setOrigin(LAYOUT.furniture.desk.origin.x, LAYOUT.furniture.desk.origin.y);
+    desk.setDepth(LAYOUT.furniture.desk.depth);
+  }
 
   // === 花盆（来自 LAYOUT）===
-  const flowerFrameCount = 16;
-  const randomFlowerFrame = Math.floor(Math.random() * flowerFrameCount);
-  const flower = this.add.sprite(
-    LAYOUT.furniture.flower.x,
-    LAYOUT.furniture.flower.y,
-    'flowers',
-    randomFlowerFrame
-  ).setOrigin(LAYOUT.furniture.flower.origin.x, LAYOUT.furniture.flower.origin.y);
-  flower.setScale(LAYOUT.furniture.flower.scale || 1);
-  flower.setDepth(LAYOUT.furniture.flower.depth);
-  flower.setInteractive({ useHandCursor: true });
-  window.flowerSprite = flower;
-  window.flowerFrameCount = flowerFrameCount;
-  flower.on('pointerdown', () => {
-    const next = Math.floor(Math.random() * window.flowerFrameCount);
-    window.flowerSprite.setFrame(next);
-  });
+  if (_t('flowers')) {
+    const flowerFrameCount = 16;
+    const randomFlowerFrame = Math.floor(Math.random() * flowerFrameCount);
+    const flower = this.add.sprite(
+      LAYOUT.furniture.flower.x,
+      LAYOUT.furniture.flower.y,
+      'flowers',
+      randomFlowerFrame
+    ).setOrigin(LAYOUT.furniture.flower.origin.x, LAYOUT.furniture.flower.origin.y);
+    flower.setScale(LAYOUT.furniture.flower.scale || 1);
+    flower.setDepth(LAYOUT.furniture.flower.depth);
+    flower.setInteractive({ useHandCursor: true });
+    window.flowerSprite = flower;
+    window.flowerFrameCount = flowerFrameCount;
+    flower.on('pointerdown', () => {
+      const next = Math.floor(Math.random() * window.flowerFrameCount);
+      window.flowerSprite.setFrame(next);
+    });
+  }
 
   // === Star 在桌前工作（来自 LAYOUT）===
-  this.anims.create({
-    key: 'star_working',
-    frames: this.anims.generateFrameNumbers('star_working', { start: 0, end: 191 }),
-    frameRate: 12,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'error_bug',
-    frames: this.anims.generateFrameNumbers('error_bug', { start: 0, end: 95 }),
-    frameRate: 12,
-    repeat: -1
-  });
+  if (_t('star_working')) {
+    this.anims.create({
+      key: 'star_working',
+      frames: this.anims.generateFrameNumbers('star_working', { start: 0, end: 191 }),
+      frameRate: 12,
+      repeat: -1
+    });
+  }
+  if (_t('error_bug')) {
+    this.anims.create({
+      key: 'error_bug',
+      frames: this.anims.generateFrameNumbers('error_bug', { start: 0, end: 95 }),
+      frameRate: 12,
+      repeat: -1
+    });
 
-  // === 错误 bug（来自 LAYOUT）===
-  const errorBug = this.add.sprite(
-    LAYOUT.furniture.errorBug.x,
-    LAYOUT.furniture.errorBug.y,
-    'error_bug',
-    0
-  ).setOrigin(LAYOUT.furniture.errorBug.origin.x, LAYOUT.furniture.errorBug.origin.y);
-  errorBug.setDepth(LAYOUT.furniture.errorBug.depth);
-  errorBug.setVisible(false);
-  errorBug.setScale(LAYOUT.furniture.errorBug.scale);
-  errorBug.anims.play('error_bug', true);
-  window.errorBug = errorBug;
-  window.errorBugDir = 1;
+    // === 错误 bug（来自 LAYOUT）===
+    const errorBug = this.add.sprite(
+      LAYOUT.furniture.errorBug.x,
+      LAYOUT.furniture.errorBug.y,
+      'error_bug',
+      0
+    ).setOrigin(LAYOUT.furniture.errorBug.origin.x, LAYOUT.furniture.errorBug.origin.y);
+    errorBug.setDepth(LAYOUT.furniture.errorBug.depth);
+    errorBug.setVisible(false);
+    errorBug.setScale(LAYOUT.furniture.errorBug.scale);
+    errorBug.anims.play('error_bug', true);
+    window.errorBug = errorBug;
+    window.errorBugDir = 1;
+  }
 
-  const starWorking = this.add.sprite(
-    LAYOUT.furniture.starWorking.x,
-    LAYOUT.furniture.starWorking.y,
-    'star_working',
-    0
-  ).setOrigin(LAYOUT.furniture.starWorking.origin.x, LAYOUT.furniture.starWorking.origin.y);
-  starWorking.setVisible(false);
-  starWorking.setScale(LAYOUT.furniture.starWorking.scale);
-  starWorking.setDepth(LAYOUT.furniture.starWorking.depth);
-  window.starWorking = starWorking;
+  if (_t('star_working')) {
+    const starWorking = this.add.sprite(
+      LAYOUT.furniture.starWorking.x,
+      LAYOUT.furniture.starWorking.y,
+      'star_working',
+      0
+    ).setOrigin(LAYOUT.furniture.starWorking.origin.x, LAYOUT.furniture.starWorking.origin.y);
+    starWorking.setVisible(false);
+    starWorking.setScale(LAYOUT.furniture.starWorking.scale);
+    starWorking.setDepth(LAYOUT.furniture.starWorking.depth);
+    window.starWorking = starWorking;
+  }
 
   // === 同步动画（来自 LAYOUT）===
-  this.anims.create({
-    key: 'sync_anim',
-    frames: this.anims.generateFrameNumbers('sync_anim', { start: 1, end: 52 }),
-    frameRate: 12,
-    repeat: -1
-  });
-  syncAnimSprite = this.add.sprite(
-    LAYOUT.furniture.syncAnim.x,
-    LAYOUT.furniture.syncAnim.y,
-    'sync_anim',
-    0
-  ).setOrigin(LAYOUT.furniture.syncAnim.origin.x, LAYOUT.furniture.syncAnim.origin.y);
-  syncAnimSprite.setDepth(LAYOUT.furniture.syncAnim.depth);
-  syncAnimSprite.anims.stop();
-  syncAnimSprite.setFrame(0);
+  if (_t('sync_anim')) {
+    this.anims.create({
+      key: 'sync_anim',
+      frames: this.anims.generateFrameNumbers('sync_anim', { start: 1, end: 52 }),
+      frameRate: 12,
+      repeat: -1
+    });
+    syncAnimSprite = this.add.sprite(
+      LAYOUT.furniture.syncAnim.x,
+      LAYOUT.furniture.syncAnim.y,
+      'sync_anim',
+      0
+    ).setOrigin(LAYOUT.furniture.syncAnim.origin.x, LAYOUT.furniture.syncAnim.origin.y);
+    syncAnimSprite.setDepth(LAYOUT.furniture.syncAnim.depth);
+    syncAnimSprite.anims.stop();
+    syncAnimSprite.setFrame(0);
+  }
 
   window.starSprite = star;
 
