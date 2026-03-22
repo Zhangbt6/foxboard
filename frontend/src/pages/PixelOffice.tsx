@@ -26,7 +26,7 @@ export default function PixelOffice() {
       phaserScript.onload = () => {
         // 4. 加载 game.js（会自动找到 #game-container 并初始化）
         const gameScript = document.createElement('script');
-        gameScript.src = '/game.js?v=6';
+        gameScript.src = '/game.js?v=10';
         document.body.appendChild(gameScript);
       };
       document.body.appendChild(phaserScript);

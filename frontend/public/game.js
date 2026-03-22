@@ -63,25 +63,28 @@ class SkyDisc {
     const container = document.getElementById(this.containerId);
     if (!container) return;
 
-    // 创建 canvas（位于 Phaser canvas 下方）
+    // 创建 canvas（位于 Phaser canvas 下方，覆盖全画面作为天空层）
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'sky-disc-canvas';
     this.canvas.style.cssText = `
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
       z-index: 0;
-      image-rendering: pixelated;
     `;
-    this.canvas.width = this.size;
-    this.canvas.height = this.size;
+    // 实际分辨率匹配游戏画布
+    this.canvas.width = LAYOUT.game.width;
+    this.canvas.height = LAYOUT.game.height;
     this.ctx = this.canvas.getContext('2d');
 
     // 插入到 Phaser canvas 之前
     const gameCanvas = container.querySelector('canvas');
     if (gameCanvas) {
+      gameCanvas.style.position = 'relative';
+      gameCanvas.style.zIndex = '1';
       container.insertBefore(this.canvas, gameCanvas);
     } else {
       container.insertBefore(this.canvas, container.firstChild);
@@ -89,45 +92,53 @@ class SkyDisc {
   }
 
   _drawSkyDisc(angle) {
-    const { ctx, size } = this;
-    const cx = size / 2;
-    const cy = size / 2;
-    const radius = size / 2 - 4;
+    const { ctx } = this;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
 
-    ctx.clearRect(0, 0, size, size);
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle * Math.PI / 180);
-    ctx.translate(-cx, -cy);
+    ctx.clearRect(0, 0, w, h);
 
-    // 圆形天空底色（渐变）
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    grad.addColorStop(0, '#1a1a3e');
-    grad.addColorStop(0.5, '#2d1b69');
-    grad.addColorStop(0.8, '#0f0f2d');
-    grad.addColorStop(1, 'rgba(10,10,30,0)');
+    // 全画面天空渐变（深夜主题）
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#0a0a1e');   // 顶部深空
+    grad.addColorStop(0.3, '#1a1a3e');  // 中部星空
+    grad.addColorStop(0.6, '#2d1b69');  // 下部紫霞
+    grad.addColorStop(1, '#0f1f3d');    // 底部深蓝
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(0, 0, w, h);
 
-    // 星辰（固定位置，随盘子旋转产生运动感）
+    // 星辰（随角度缓慢旋转产生运动感）
+    ctx.save();
+    ctx.translate(w / 2, h * 0.3);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.translate(-w / 2, -h * 0.3);
+
     const stars = [
-      { x: cx - 180, y: cy - 60, r: 2, brightness: 1.0 },
-      { x: cx + 150, y: cy - 100, r: 1.5, brightness: 0.8 },
-      { x: cx - 80, y: cy - 180, r: 2, brightness: 0.9 },
-      { x: cx + 200, y: cy + 50, r: 1, brightness: 0.6 },
-      { x: cx - 220, y: cy + 100, r: 1.5, brightness: 0.7 },
-      { x: cx + 50, y: cy - 220, r: 2, brightness: 1.0 },
-      { x: cx - 150, y: cy + 180, r: 1, brightness: 0.5 },
-      { x: cx + 180, y: cy - 40, r: 1.5, brightness: 0.8 },
-      { x: cx - 50, y: cy + 200, r: 2, brightness: 0.9 },
-      { x: cx + 100, y: cy + 180, r: 1, brightness: 0.6 },
+      { x: 100, y: 30, r: 2, b: 1.0 },
+      { x: 300, y: 60, r: 1.5, b: 0.8 },
+      { x: 500, y: 20, r: 2, b: 0.9 },
+      { x: 700, y: 50, r: 1, b: 0.6 },
+      { x: 900, y: 35, r: 1.5, b: 0.7 },
+      { x: 150, y: 100, r: 2, b: 1.0 },
+      { x: 400, y: 120, r: 1, b: 0.5 },
+      { x: 600, y: 90, r: 1.5, b: 0.8 },
+      { x: 800, y: 110, r: 2, b: 0.9 },
+      { x: 1000, y: 45, r: 1, b: 0.6 },
+      { x: 1100, y: 80, r: 1.5, b: 0.7 },
+      { x: 200, y: 150, r: 1, b: 0.5 },
+      { x: 450, y: 170, r: 2, b: 0.8 },
+      { x: 750, y: 160, r: 1.5, b: 0.9 },
+      { x: 1050, y: 130, r: 1, b: 0.6 },
+      { x: 250, y: 200, r: 1.5, b: 0.7 },
+      { x: 550, y: 210, r: 2, b: 0.8 },
+      { x: 850, y: 190, r: 1, b: 0.5 },
+      { x: 1150, y: 170, r: 1.5, b: 0.9 },
+      { x: 50, y: 70, r: 1, b: 0.6 },
     ];
 
     for (const s of stars) {
       const flicker = 0.7 + 0.3 * Math.sin(Date.now() / 500 + s.x);
-      ctx.globalAlpha = s.brightness * flicker;
+      ctx.globalAlpha = s.b * flicker;
       ctx.fillStyle = '#fffde7';
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
@@ -136,13 +147,6 @@ class SkyDisc {
 
     ctx.globalAlpha = 1;
     ctx.restore();
-
-    // 边框圆环
-    ctx.strokeStyle = 'rgba(100, 80, 200, 0.3)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
   }
 
   _animate() {
@@ -198,6 +202,7 @@ const config = {
   width: LAYOUT.game.width,
   height: LAYOUT.game.height,
   parent: 'game-container',
+  // transparent: true,  // 等背景PNG化+绿幕去除后再开
   pixelArt: true,
   physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
   scene: { preload: preload, create: create, update: update }
@@ -455,41 +460,55 @@ function preload() {
     hideLoadingOverlay();
   });
 
-  this.load.image('office_bg', '/static/office_bg_small' + (supportsWebP ? '.webp' : '.png') + '?v=20260321');
-  this.load.spritesheet('star_idle', '/sprites/spark_idle.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('star_researching', '/sprites/spark_idle.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
+  const V = '?v=20260322d';
 
-  // SKIP: this.load.image('sofa_idle', '/static/sofa-idle' + getExt('sofa-idle.png'));
-  // SKIP: this.load.spritesheet('sofa_busy', '/static/sofa-busy-spritesheet' + getExt('sofa-busy-spritesheet.png'), { frameWidth: 256, frameHeight: 256 });
+  // === 背景 ===
+  this.load.image('office_bg', '/' + LAYOUT.background.sprite + V);
 
-  // SKIP: this.load.spritesheet('plants', '/static/plants-spritesheet' + getExt('plants-spritesheet.png'), { frameWidth: 160, frameHeight: 160 });
-  // SKIP: this.load.spritesheet('posters', '/static/posters-spritesheet' + getExt('posters-spritesheet.png'), { frameWidth: 160, frameHeight: 160 });
-  // SKIP: this.load.spritesheet('coffee_machine', '/static/coffee-machine-spritesheet' + getExt('coffee-machine-spritesheet.png'), { frameWidth: 230, frameHeight: 230 });
-  this.load.spritesheet('serverroom', '/static/serverroom-spritesheet' + getExt('serverroom-spritesheet.png'), { frameWidth: 180, frameHeight: 251 });
+  // === 天空盘 ===
+  if (LAYOUT.skyDisc && LAYOUT.skyDisc.enabled) {
+    this.load.image('sky_disc', '/' + LAYOUT.skyDisc.imageUrl + V);
+  }
 
-  this.load.spritesheet('error_bug', '/static/error-bug-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 180, frameHeight: 180 });
-  this.load.spritesheet('cats', '/static/cats-spritesheet' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 160, frameHeight: 160 });
-  // SKIP: this.load.image('desk', '/static/desk' + getExt('desk.png'));
-  this.load.spritesheet('star_working', '/static/star-working-spritesheet-grid' + (supportsWebP ? '.webp' : '.png'), { frameWidth: 230, frameHeight: 144 });
-  // SKIP: this.load.spritesheet('sync_anim', '/static/sync-animation-spritesheet-grid.png', { frameWidth: 256, frameHeight: 256 });
-  // SKIP: this.load.image('memo_bg', '/static/memo-bg.png');
+  // === 角色：从 LAYOUT.workstations 动态加载 ===
+  LAYOUT.workstations.forEach(ws => {
+    Object.entries(ws.sprites).forEach(([action, path]) => {
+      const key = ws.id + '_' + action;
+      if (!path) return;
+      // 4帧 spritesheet (256x64) for webp, 单帧 image for png
+      if (path.endsWith('.webp')) {
+        this.load.spritesheet(key, '/' + path + V, { frameWidth: 64, frameHeight: 64 });
+      } else {
+        this.load.image(key, '/' + path + V);
+      }
+    });
+  });
 
-  // 花火专属像素动画（主人提供，64x64 x 4帧）
-  this.load.spritesheet('spark_idle', '/sprites/spark_idle.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('spark_wave', '/sprites/spark_wave.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('spark_wiggle', '/sprites/spark_wiggle.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('spark_think', '/sprites/spark_think.webp?v=20260321', { frameWidth: 64, frameHeight: 64 });
+  // === 兼容旧key: star_idle / star_researching ===
+  if (!this.load.textureManager || true) {
+    this.load.spritesheet('star_idle', '/sprites/spark_idle.webp' + V, { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('star_researching', '/sprites/spark_idle.webp' + V, { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('star_working', '/static/star-working-spritesheet-grid' + (supportsWebP ? '.webp' : '.png') + V, { frameWidth: 230, frameHeight: 144 });
+  }
 
-  // 四狐多角色：加载其它三只狐狸的spritesheet
-  // 四狐 spritesheet 均为 256x64（4帧×64px）
-  this.load.spritesheet('qingfox_idle', '/sprites/qingfox_idle_4f.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('whitefox_idle', '/sprites/whitefox_idle_4f.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('blackfox_idle', '/sprites/blackfox_idle_4f.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
-  this.load.spritesheet('fox_bluefox', '/sprites/fox_bluefox.webp?v=20260322c', { frameWidth: 64, frameHeight: 64 });
+  // === 自然装饰物 ===
+  if (LAYOUT.naturalDecorations) {
+    LAYOUT.naturalDecorations.forEach(d => {
+      this.load.image(d.id, '/' + d.sprite + V);
+    });
+  }
 
-  // 新办公桌：强制 PNG（透明）
-  this.load.image('desk_v2', '/static/desk-v2.png');
-  // SKIP: this.load.spritesheet('flowers', '/static/flowers-spritesheet.png', { frameWidth: 65, frameHeight: 65 });
+  // === 家具装饰物 ===
+  if (LAYOUT.furnitureDecorations) {
+    LAYOUT.furnitureDecorations.forEach(d => {
+      this.load.image(d.id, '/' + d.sprite + V);
+    });
+  }
+
+  // === Legacy 共享素材（仍在使用的） ===
+  this.load.spritesheet('serverroom', '/static/serverroom-spritesheet' + getExt('serverroom-spritesheet.png') + V, { frameWidth: 180, frameHeight: 251 });
+  this.load.spritesheet('error_bug', '/static/error-bug-spritesheet-grid' + (supportsWebP ? '.webp' : '.png') + V, { frameWidth: 180, frameHeight: 180 });
+  this.load.spritesheet('cats', '/static/cats-spritesheet' + (supportsWebP ? '.webp' : '.png') + V, { frameWidth: 160, frameHeight: 160 });
 }
 
 // ============================================================
@@ -767,16 +786,35 @@ function create() {
   const _t = (k) => this.textures.exists(k);
 
   // --- LAYER 0: 天空盘 (FB-087) ---
-  // 旋转天空在 Phaser 背景图下方，canvas 实现
-  skyDisc = new SkyDisc('game-container', {
-    degreesPerSecond: 360 / (24 * 60),  // 360°/24min
-    speed: 1.0,
-    size: 800
-  });
-  skyDisc.start();
+  if (LAYOUT.skyDisc && LAYOUT.skyDisc.enabled) {
+    skyDisc = new SkyDisc('game-container', {
+      degreesPerSecond: 360 / (24 * 60),
+      speed: 1.0,
+      size: LAYOUT.skyDisc.size || 500
+    });
+    skyDisc.start();
+  }
 
-  // --- LAYER 100: 背景主体 ---
+  // --- LAYER 100: 背景主体（莲花池） ---
   this.add.image(640, 360, 'office_bg').setDepth(LAYERS.BACKGROUND);
+
+  // --- 自然装饰物 ---
+  if (LAYOUT.naturalDecorations) {
+    LAYOUT.naturalDecorations.forEach(d => {
+      if (_t(d.id)) {
+        this.add.image(d.x, d.y, d.id).setDepth(d.depth).setOrigin(0.5);
+      }
+    });
+  }
+
+  // --- 家具装饰物 ---
+  if (LAYOUT.furnitureDecorations) {
+    LAYOUT.furnitureDecorations.forEach(d => {
+      if (_t(d.id)) {
+        this.add.image(d.x, d.y, d.id).setDepth(d.depth).setOrigin(0.5);
+      }
+    });
+  }
 
   // 生成粒子纹理 & 创建发射器
   createParticleTextures(this);

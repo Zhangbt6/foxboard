@@ -5,6 +5,15 @@ All notable changes to **FoxBoard** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-03-22
+
+### Added
+- **像素办公室 v2 角色精灵** (FB-082): 青狐/白狐/黑狐/花火古风像素角色，64×64，4方向×idle/walk动画
+- **13层 Phaser 引擎架构** (FB-086, FB-087): 天空层/装饰层/角色层等13层分离 + SkyDisc旋转系统 + 交互引擎
+- **角色行走系统+交互+粒子特效** (FB-088, FB-089, FB-090): 点击移动/碰撞检测/脚步粒子/交互触发
+- **像素办公室背景图** (FB-080, FB-081): 天空盘/办公室背景/科技中国风装饰
+- **精灵自动化裁剪工具** (FB-091): `grid_to_sprites.py` 宫格图→单精灵批量裁剪流水线
+
 ## [0.6.0] - 2026-03-21
 
 ### Added
