@@ -1,6 +1,167 @@
 // Star Office UI - 游戏主逻辑
 // 依赖: layout.js（必须在这个之前加载）
 
+// ============================================================
+// LAYER CONSTANTS - 13层架构 (FB-086)
+// ============================================================
+// 天空盘(depth0)→远山→背景主体→水面→建筑→长廊→家具→角色→粒子→UI
+const LAYERS = {
+  SKY_DISC:       0,   // 天空盘 (FB-087)
+  DISTANT_MOUNTAIN: 50, // 远山
+  BACKGROUND:      100,  // 背景主体
+  WATER:          200,  // 水面（荷花池）
+  BUILDINGS:      300,  // 建筑
+  CORRIDOR:       400,  // 长廊
+  FURNITURE:      500,  // 家具（500-799）
+  CHARACTERS:     800,  // 角色（800-849）
+  PARTICLES:      850,  // 粒子特效（850-899）
+  UI_OVERLAY:     900,  // UI覆盖层（900-949）
+  TEXT:           950,  // 文字标签（950-999）
+  CURSORS:       1000,  // 鼠标坐标（1000-1099）
+  TOP:           1100,  // 顶部浮动（气泡/调试1100-1999）
+};
+
+// ============================================================
+// SKY DISC - 旋转天空系统 (FB-087)
+// ============================================================
+class SkyDisc {
+  constructor(containerId, options = {}) {
+    this.containerId = containerId;
+    this.angle = 0;
+    // 默认360°/24min = 0.25°/s
+    this.degreesPerSecond = options.degreesPerSecond || (360 / (24 * 60));
+    this.speed = options.speed || 1.0;  // 速度倍率
+    this.running = false;
+    this.lastTime = 0;
+    this.canvas = null;
+    this.ctx = null;
+    this.size = options.size || 512;
+    this._rafId = null;
+  }
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this._ensureCanvas();
+    this._animate();
+  }
+
+  stop() {
+    this.running = false;
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+  }
+
+  setSpeed(speed) {
+    this.speed = speed;
+  }
+
+  _ensureCanvas() {
+    if (this.canvas) return;
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+
+    // 创建 canvas（位于 Phaser canvas 下方）
+    this.canvas = document.createElement('canvas');
+    this.canvas.id = 'sky-disc-canvas';
+    this.canvas.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 0;
+      image-rendering: pixelated;
+    `;
+    this.canvas.width = this.size;
+    this.canvas.height = this.size;
+    this.ctx = this.canvas.getContext('2d');
+
+    // 插入到 Phaser canvas 之前
+    const gameCanvas = container.querySelector('canvas');
+    if (gameCanvas) {
+      container.insertBefore(this.canvas, gameCanvas);
+    } else {
+      container.insertBefore(this.canvas, container.firstChild);
+    }
+  }
+
+  _drawSkyDisc(angle) {
+    const { ctx, size } = this;
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size / 2 - 4;
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.translate(-cx, -cy);
+
+    // 圆形天空底色（渐变）
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0, '#1a1a3e');
+    grad.addColorStop(0.5, '#2d1b69');
+    grad.addColorStop(0.8, '#0f0f2d');
+    grad.addColorStop(1, 'rgba(10,10,30,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 星辰（固定位置，随盘子旋转产生运动感）
+    const stars = [
+      { x: cx - 180, y: cy - 60, r: 2, brightness: 1.0 },
+      { x: cx + 150, y: cy - 100, r: 1.5, brightness: 0.8 },
+      { x: cx - 80, y: cy - 180, r: 2, brightness: 0.9 },
+      { x: cx + 200, y: cy + 50, r: 1, brightness: 0.6 },
+      { x: cx - 220, y: cy + 100, r: 1.5, brightness: 0.7 },
+      { x: cx + 50, y: cy - 220, r: 2, brightness: 1.0 },
+      { x: cx - 150, y: cy + 180, r: 1, brightness: 0.5 },
+      { x: cx + 180, y: cy - 40, r: 1.5, brightness: 0.8 },
+      { x: cx - 50, y: cy + 200, r: 2, brightness: 0.9 },
+      { x: cx + 100, y: cy + 180, r: 1, brightness: 0.6 },
+    ];
+
+    for (const s of stars) {
+      const flicker = 0.7 + 0.3 * Math.sin(Date.now() / 500 + s.x);
+      ctx.globalAlpha = s.brightness * flicker;
+      ctx.fillStyle = '#fffde7';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // 边框圆环
+    ctx.strokeStyle = 'rgba(100, 80, 200, 0.3)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  _animate() {
+    if (!this.running) return;
+    const now = performance.now();
+    if (this.lastTime > 0) {
+      const delta = now - this.lastTime;
+      this.angle += this.degreesPerSecond * this.speed * (delta / 1000);
+      if (this.angle >= 360) this.angle -= 360;
+      this._drawSkyDisc(this.angle);
+    }
+    this.lastTime = now;
+    this._rafId = requestAnimationFrame(() => this._animate());
+  }
+}
+
+// 天空盘实例（延迟初始化，在 create() 中启动）
+let skyDisc = null;
+
 // 检测浏览器是否支持 WebP
 let supportsWebP = false;
 
@@ -415,7 +576,7 @@ function createParticleEmitters(scene) {
     lifespan: { min: 4000, max: 8000 },
     angle: { min: 0, max: 360 }
   });
-  fireflyEmitter.setDepth(cfg.firefly.depth);
+  fireflyEmitter.setDepth(LAYERS.PARTICLES);
 
   // --- 樱花瓣：从上往下飘落，轻微左右摇摆 ---
   petalEmitter = scene.add.particles(0, 0, particleTextures.petal, {
@@ -433,7 +594,7 @@ function createParticleEmitters(scene) {
     gravityY: 10,
     emitting: true
   });
-  petalEmitter.setDepth(cfg.petal.depth);
+  petalEmitter.setDepth(LAYERS.PARTICLES);
 
   // --- 水面波纹：在荷花池区域周期出现 ---
   rippleEmitter = scene.add.particles(pond.x, pond.y, particleTextures.ripple, {
@@ -449,7 +610,7 @@ function createParticleEmitters(scene) {
     rotate: { min: 0, max: 360 },
     speed: 0
   });
-  rippleEmitter.setDepth(cfg.ripple.depth);
+  rippleEmitter.setDepth(LAYERS.PARTICLES);
 }
 
 /**
@@ -599,12 +760,23 @@ function updateCharacterWalkers(time, delta) {
 }
 
 // ============================================================
-// 主 create()
+// 主 create() - 13层架构
 // ============================================================
 function create() {
   game = this;
   const _t = (k) => this.textures.exists(k);
-  this.add.image(640, 360, 'office_bg');
+
+  // --- LAYER 0: 天空盘 (FB-087) ---
+  // 旋转天空在 Phaser 背景图下方，canvas 实现
+  skyDisc = new SkyDisc('game-container', {
+    degreesPerSecond: 360 / (24 * 60),  // 360°/24min
+    speed: 1.0,
+    size: 800
+  });
+  skyDisc.start();
+
+  // --- LAYER 100: 背景主体 ---
+  this.add.image(640, 360, 'office_bg').setDepth(LAYERS.BACKGROUND);
 
   // 生成粒子纹理 & 创建发射器
   createParticleTextures(this);
@@ -652,7 +824,7 @@ function create() {
   lotusGfx.destroy();
 
   const lotusSprite = this.add.sprite(pondCenterX - 30, pondCenterY - 10, 'lotus_tex');
-  lotusSprite.setDepth(pond.depth + 1);
+  lotusSprite.setDepth(LAYERS.WATER + 1);
   lotusSprite.setScale(1.2);
   lotusSprite.setInteractive({ useHandCursor: true });
 
@@ -671,7 +843,7 @@ function create() {
     emitting: false,
     gravityY: 80
   });
-  lotusEmitter.setDepth(pond.depth + 2);
+  lotusEmitter.setDepth(LAYERS.WATER + 2);
 
   lotusSprite.on('pointerdown', () => {
     if (lotusBlooming) return;
@@ -732,7 +904,7 @@ function create() {
   const koiPool = [];
   for (let i = 0; i < 3; i++) {
     const koi = this.add.sprite(pondCenterX, pondCenterY, 'koi_tex');
-    koi.setDepth(pond.depth + 2);
+    koi.setDepth(LAYERS.WATER + 2);
     koi.setVisible(false);
     koiPool.push(koi);
   }
@@ -750,7 +922,7 @@ function create() {
     gravityY: 300,
     emitting: false
   });
-  splashEmitter.setDepth(pond.depth + 3);
+  splashEmitter.setDepth(LAYERS.WATER + 3);
 
   // 金币粒子发射器
   const coinEmitter = this.add.particles(0, 0, 'coin_tex', {
@@ -765,7 +937,7 @@ function create() {
     gravityY: 200,
     emitting: false
   });
-  coinEmitter.setDepth(pond.depth + 3);
+  coinEmitter.setDepth(LAYERS.WATER + 3);
 
   // --- 荷花池点击区（透明矩形，触发鲤鱼跳跃）---
   const pondZone = this.add.rectangle(
@@ -773,7 +945,7 @@ function create() {
     pond.width, pond.height,
     0x000000, 0
   );
-  pondZone.setDepth(pond.depth);
+  pondZone.setDepth(LAYERS.WATER);
   pondZone.setInteractive({ useHandCursor: true });
 
   let koiJumping = false;
@@ -840,7 +1012,7 @@ function create() {
   pondGfx.generateTexture('pond_tex', 280, 120);
   pondGfx.destroy();
   const pondBg = this.add.sprite(pondCenterX, pondCenterY, 'pond_tex');
-  pondBg.setDepth(pond.depth);
+  pondBg.setDepth(LAYERS.WATER);
   // 水面轻微波动动画
   this.tweens.add({
     targets: pondBg,
@@ -955,7 +1127,7 @@ function create() {
 
       const sp = game.add.sprite(ws.x, ws.y, spriteKey);
       sp.setOrigin(0.5);
-      sp.setDepth(ws.depth || 900);
+      sp.setDepth(ws.depth || LAYERS.CHARACTERS);
       sp.setVisible(true);
       sp.anims.play(spriteKey + '_anim', true);
       workstationSprites[agentId] = sp;
@@ -968,7 +1140,7 @@ function create() {
         stroke: '#000',
         strokeThickness: 3
       }).setOrigin(0.5);
-      nameTag.setDepth(1100);
+      nameTag.setDepth(LAYERS.TEXT);
       workstationSprites[agentId + '_nameTag'] = nameTag;
     }
     window.workstationSprites = workstationSprites;
@@ -981,7 +1153,7 @@ function create() {
     star.setOrigin(0.5);
     star.setScale(1.4);
     star.setAlpha(0.95);
-    star.setDepth(20);
+    star.setDepth(LAYERS.CHARACTERS);
     star.setVisible(false);
     star.anims.stop();
   }
@@ -996,6 +1168,7 @@ function create() {
   const plaqueY = LAYOUT.plaque.y;
   const plaqueBg = game.add.rectangle(plaqueX, plaqueY, LAYOUT.plaque.width, LAYOUT.plaque.height, 0x5d4037);
   plaqueBg.setStrokeStyle(3, 0x3e2723);
+  plaqueBg.setDepth(LAYERS.UI_OVERLAY);
   const plaqueText = game.add.text(plaqueX, plaqueY, '海辛小龙虾的办公室', {
     fontFamily: 'ArkPixel, monospace',
     fontSize: '18px',
@@ -1004,8 +1177,9 @@ function create() {
     stroke: '#000',
     strokeThickness: 2
   }).setOrigin(0.5);
-  game.add.text(plaqueX - 190, plaqueY, '⭐', { fontFamily: 'ArkPixel, monospace', fontSize: '20px' }).setOrigin(0.5);
-  game.add.text(plaqueX + 190, plaqueY, '⭐', { fontFamily: 'ArkPixel, monospace', fontSize: '20px' }).setOrigin(0.5);
+  plaqueText.setDepth(LAYERS.UI_OVERLAY);
+  game.add.text(plaqueX - 190, plaqueY, '⭐', { fontFamily: 'ArkPixel, monospace', fontSize: '20px' }).setOrigin(0.5).setDepth(LAYERS.UI_OVERLAY);
+  game.add.text(plaqueX + 190, plaqueY, '⭐', { fontFamily: 'ArkPixel, monospace', fontSize: '20px' }).setOrigin(0.5).setDepth(LAYERS.UI_OVERLAY);
 
   // === 植物们（来自 LAYOUT）===
   if (_t('plants')) {
@@ -1538,7 +1712,7 @@ function showBubble() {
   bg.setStrokeStyle(2, 0x000000);
   const txt = game.add.text(anchorX, bubbleY, text, { fontFamily: 'ArkPixel, monospace', fontSize: '12px', fill: '#000', align: 'center' }).setOrigin(0.5);
   bubble = game.add.container(0, 0, [bg, txt]);
-  bubble.setDepth(1200);
+  bubble.setDepth(LAYERS.TOP);
   setTimeout(() => { if (bubble) { bubble.destroy(); bubble = null; } }, 3000);
 }
 
@@ -1553,7 +1727,7 @@ function showCatBubble() {
   bg.setStrokeStyle(2, 0xd4a574);
   const txt = game.add.text(anchorX, anchorY, text, { fontFamily: 'ArkPixel, monospace', fontSize: '11px', fill: '#8b6914', align: 'center' }).setOrigin(0.5);
   window.catBubble = game.add.container(0, 0, [bg, txt]);
-  window.catBubble.setDepth(2100);
+  window.catBubble.setDepth(LAYERS.TOP);
   setTimeout(() => { if (window.catBubble) { window.catBubble.destroy(); window.catBubble = null; } }, 4000);
 }
 
@@ -1723,7 +1897,7 @@ function renderAgent(agent) {
   if (!agents[agentId]) {
     // 新建 agent
     const container = game.add.container(baseX, baseY);
-    container.setDepth(1200 + (isMain ? 100 : 0)); // 放到最顶层！
+    container.setDepth(LAYERS.TOP + (isMain ? 100 : 0)); // 放到最顶层！
 
     let agentVisual;
     if (visualSpec && visualSpec.type === 'sprite' && game.textures.exists(visualSpec.texture)) {
@@ -1770,7 +1944,7 @@ function renderAgent(agent) {
     const container = agents[agentId];
     container.setPosition(baseX, baseY);
     container.setAlpha(alpha);
-    container.setDepth(1200 + (isMain ? 100 : 0));
+    container.setDepth(LAYERS.TOP + (isMain ? 100 : 0));
 
     // 更新主视觉（花火用 spritesheet，其它继续占位）
     const agentVisual = container.getAt(0);
