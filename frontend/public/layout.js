@@ -126,6 +126,53 @@ const OFFICE_LAYOUT = {
     sprite: 'sprites/office_bg.webp'
   },
 
+  // === 荷花池（粒子特效目标区域） ===
+  pond: {
+    x: 640, y: 380,   // 池中心
+    width: 280, height: 120,  // 池范围
+    depth: 8           // 水面 depth（低于家具但高于背景）
+  },
+
+  // === 角色行走路径点 ===
+  // 每个点代表办公室内一个可达位置
+  waypoints: [
+    { id: 'spark_desk', x: 220, y: 340 },
+    { id: 'qing_desk',  x: 900, y: 340 },
+    { id: 'white_desk', x: 220, y: 540 },
+    { id: 'black_desk', x: 900, y: 540 },
+    { id: 'breakroom',  x: 420, y: 300 },
+    { id: 'window',     x: 1100, y: 200 },
+    { id: 'server',     x: 1021, y: 200 },
+    { id: 'cat_area',   x: 94,  y: 557 },
+    { id: 'coffee',     x: 659, y: 400 },
+    { id: 'sofa',       x: 670, y: 200 }
+  ],
+
+  // === 粒子特效配置 ===
+  particles: {
+    // 萤火虫：夜晚漂浮在办公室上空
+    firefly: {
+      depth: 950,       // UI层之下，角色层之上
+      count: 15,
+      emitX: { min: 100, max: 1180 },
+      emitY: { min: 80, max: 300 }
+    },
+    // 樱花瓣：从顶部飘落
+    petal: {
+      depth: 920,
+      count: 20,
+      emitX: { min: 50, max: 1230 },
+      emitY: { min: -20, max: 0 }
+    },
+    // 水波纹：荷花池区域
+    ripple: {
+      depth: 9,
+      count: 8,
+      emitX: { min: 500, max: 780 },
+      emitY: { min: 340, max: 420 }
+    }
+  },
+
   // === 牌匾（办公室名称） ===
   plaque: {
     x: 640, y: 720 - 36,

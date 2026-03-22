@@ -331,10 +331,525 @@ function preload() {
   // SKIP: this.load.spritesheet('flowers', '/static/flowers-spritesheet.png', { frameWidth: 65, frameHeight: 65 });
 }
 
+// ============================================================
+// 粒子特效系统 - FB-090
+// 萤火虫 / 樱花瓣 / 水面波纹
+// ============================================================
+
+// 粒子纹理缓存（key => Phaser.Textures.Texture）
+const particleTextures = {};
+
+/**
+ * 在 create() 中调用：生成所有粒子纹理
+ */
+function createParticleTextures(scene) {
+  // --- 萤火虫：发光小圆点 ---
+  const ffGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+  // 外发光
+  ffGfx.fillStyle(0xffff88, 0.3);
+  ffGfx.fillCircle(8, 8, 8);
+  ffGfx.fillStyle(0xffffaa, 0.6);
+  ffGfx.fillCircle(8, 8, 5);
+  ffGfx.fillStyle(0xffffff, 1.0);
+  ffGfx.fillCircle(8, 8, 2);
+  ffGfx.generateTexture('firefly_tex', 16, 16);
+  ffGfx.destroy();
+  particleTextures.firefly = 'firefly_tex';
+
+  // --- 樱花瓣：粉色椭圆 ---
+  const ptGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+  ptGfx.fillStyle(0xffb7c5, 0.9);
+  ptGfx.fillEllipse(7, 5, 8, 5);
+  ptGfx.fillStyle(0xffd5e0, 0.7);
+  ptGfx.fillEllipse(6, 4, 5, 3);
+  ptGfx.generateTexture('petal_tex', 14, 10);
+  ptGfx.destroy();
+  particleTextures.petal = 'petal_tex';
+
+  // --- 水滴：蓝色小圆 ---
+  const wdGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+  wdGfx.fillStyle(0x88ccff, 0.8);
+  wdGfx.fillCircle(5, 5, 5);
+  wdGfx.fillStyle(0xaaeeff, 1.0);
+  wdGfx.fillCircle(5, 5, 2);
+  wdGfx.generateTexture('waterdrop_tex', 10, 10);
+  wdGfx.destroy();
+  particleTextures.waterdrop = 'waterdrop_tex';
+
+  // --- 水波圆环：同心圆 ---
+  const rpGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+  rpGfx.lineStyle(1.5, 0x88ccff, 0.8);
+  rpGfx.strokeCircle(12, 12, 10);
+  rpGfx.lineStyle(1.0, 0xaaddff, 0.5);
+  rpGfx.strokeCircle(12, 12, 6);
+  rpGfx.lineStyle(0.5, 0xccEEFF, 0.3);
+  rpGfx.strokeCircle(12, 12, 2);
+  rpGfx.generateTexture('ripple_tex', 24, 24);
+  rpGfx.destroy();
+  particleTextures.ripple = 'ripple_tex';
+}
+
+/**
+ * 在 create() 中调用：创建所有粒子发射器
+ */
+let fireflyEmitter, petalEmitter, rippleEmitter;
+
+function createParticleEmitters(scene) {
+  const cfg = LAYOUT.particles;
+  const pond = LAYOUT.pond;
+
+  // --- 萤火虫：随机漂浮，发光闪烁 ---
+  fireflyEmitter = scene.add.particles(0, 0, particleTextures.firefly, {
+    x: { min: cfg.firefly.emitX.min, max: cfg.firefly.emitX.max },
+    y: { min: cfg.firefly.emitY.min, max: cfg.firefly.emitY.max },
+    lifespan: 6000,
+    speedY: { min: -8, max: 8 },
+    speedX: { min: -15, max: 15 },
+    scale: { start: 0.5, end: 0.2 },
+    alpha: { start: 0.9, end: 0.0 },
+    tint: [0xffffaa, 0xaaffaa, 0xffffff, 0xffee88],
+    frequency: 400,
+    quantity: 1,
+    blendMode: 'ADD',
+    emitting: true,
+    lifespan: { min: 4000, max: 8000 },
+    angle: { min: 0, max: 360 }
+  });
+  fireflyEmitter.setDepth(cfg.firefly.depth);
+
+  // --- 樱花瓣：从上往下飘落，轻微左右摇摆 ---
+  petalEmitter = scene.add.particles(0, 0, particleTextures.petal, {
+    x: { min: cfg.petal.emitX.min, max: cfg.petal.emitX.max },
+    y: { min: cfg.petal.emitY.min, max: cfg.petal.emitY.max },
+    lifespan: 12000,
+    speedY: { min: 20, max: 50 },
+    speedX: { min: -20, max: 20 },
+    scale: { start: 0.7, end: 0.4 },
+    alpha: { start: 0.85, end: 0.0 },
+    tint: [0xffb7c5, 0xffd0dd, 0xffe8ee, 0xffc5d5],
+    rotate: { min: -180, max: 180 },
+    frequency: 150,
+    quantity: 1,
+    gravityY: 10,
+    emitting: true
+  });
+  petalEmitter.setDepth(cfg.petal.depth);
+
+  // --- 水面波纹：在荷花池区域周期出现 ---
+  rippleEmitter = scene.add.particles(pond.x, pond.y, particleTextures.ripple, {
+    x: { min: -pond.width / 2, max: pond.width / 2 },
+    y: { min: -pond.height / 2, max: pond.height / 2 },
+    lifespan: 2500,
+    scale: { start: 0.6, end: 1.8 },
+    alpha: { start: 0.7, end: 0.0 },
+    tint: 0x88ccff,
+    frequency: 600,
+    quantity: 1,
+    emitting: true,
+    rotate: { min: 0, max: 360 },
+    speed: 0
+  });
+  rippleEmitter.setDepth(cfg.ripple.depth);
+}
+
+/**
+ * 每帧更新：萤火虫仅在夜间模式启用
+ * 夜间模式由 window.nightMode 控制（由外部切换）
+ */
+let lastNightCheck = 0;
+function updateParticles(time) {
+  if (time - lastNightCheck < 2000) return;
+  lastNightCheck = time;
+  const isNight = window.nightMode === true;
+  if (fireflyEmitter) fireflyEmitter.emitting = isNight;
+  // 花瓣和水波始终开启
+}
+
+// ============================================================
+// 角色行走系统 - FB-088
+// 预设路径点随机移动 + 方向判定切换sprite flip
+// ============================================================
+
+/**
+ * 单个角色的行走状态
+ */
+class CharacterWalker {
+  constructor(agentId, sprite, nameTag, homeX, homeY) {
+    this.agentId = agentId;
+    this.sprite = sprite;
+    this.nameTag = nameTag;
+    this.homeX = homeX;
+    this.homeY = homeY;
+    this.x = homeX;
+    this.y = homeY;
+    this.targetX = homeX;
+    this.targetY = homeY;
+    this.speed = 60; // pixels per second
+    this.isMoving = false;
+    this.facingLeft = false;
+    this.moveTimer = 0;
+    this.nextMoveDelay = this._randomDelay(); // ms until next move
+    this.lastUpdate = 0;
+    this.waypoints = LAYOUT.waypoints || [];
+  }
+
+  _randomDelay() {
+    // 30-120秒随机换目的地
+    return (30 + Math.random() * 90) * 1000;
+  }
+
+  _pickRandomWaypoint() {
+    // 排除当前所在位置
+    const candidates = this.waypoints.filter(wp =>
+      Math.abs(wp.x - this.x) > 20 || Math.abs(wp.y - this.y) > 20
+    );
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  startMovingTo(targetX, targetY) {
+    this.targetX = targetX;
+    this.targetY = targetY;
+    this.isMoving = true;
+    // 方向判定
+    this.facingLeft = targetX < this.x;
+    if (this.sprite) {
+      this.sprite.setFlipX(this.facingLeft);
+    }
+  }
+
+  update(time, delta) {
+    if (!this.isMoving || !this.sprite) return;
+
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 2) {
+      // 到达目标
+      this.x = this.targetX;
+      this.y = this.targetY;
+      this.isMoving = false;
+      if (this.sprite) this.sprite.setFlipX(false);
+      return;
+    }
+
+    // 线性移动
+    const move = this.speed * (delta / 1000);
+    const ratio = Math.min(move / dist, 1);
+    this.x += dx * ratio;
+    this.y += dy * ratio;
+
+    // 更新 sprite 和 nameTag 位置
+    if (this.sprite) {
+      this.sprite.x = this.x;
+      this.sprite.y = this.y;
+    }
+    if (this.nameTag) {
+      this.nameTag.x = this.x;
+      this.nameTag.y = this.y - 42;
+    }
+  }
+
+  /**
+   * 每帧调用：处理计时器，决定是否开始新移动
+   */
+  tick(time, delta) {
+    if (!this.isMoving) {
+      this.moveTimer += delta;
+      if (this.moveTimer >= this.nextMoveDelay) {
+        this.moveTimer = 0;
+        this.nextMoveDelay = this._randomDelay();
+        const wp = this._pickRandomWaypoint();
+        if (wp) {
+          this.startMovingTo(wp.x, wp.y);
+        }
+      }
+    }
+    this.update(time, delta);
+  }
+}
+
+// 所有角色的walker实例
+const characterWalkers = {};
+let walkSystemActive = false;
+
+function initCharacterWalkers() {
+  if (walkSystemActive) return;
+  const WS = window.OFFICE_LAYOUT || LAYOUT.workstations;
+  if (!WS || !window.workstationSprites) return;
+
+  for (const ws of WS) {
+    const agentId = ws.agentId;
+    const sp = window.workstationSprites[agentId];
+    const nameTag = window.workstationSprites[agentId + '_nameTag'];
+    if (!sp) continue;
+    characterWalkers[agentId] = new CharacterWalker(
+      agentId, sp, nameTag, ws.x, ws.y
+    );
+  }
+  walkSystemActive = true;
+}
+
+function updateCharacterWalkers(time, delta) {
+  if (!walkSystemActive) return;
+  for (const walker of Object.values(characterWalkers)) {
+    walker.tick(time, delta);
+  }
+}
+
+// ============================================================
+// 主 create()
+// ============================================================
 function create() {
   game = this;
   const _t = (k) => this.textures.exists(k);
   this.add.image(640, 360, 'office_bg');
+
+  // 生成粒子纹理 & 创建发射器
+  createParticleTextures(this);
+  createParticleEmitters(this);
+
+  // ============================================================
+  // 互动系统 - FB-089
+  // 点击荷花绽放 + 点击锦绣(鲤鱼)跳跃 + 水花 + 金币
+  // ============================================================
+
+  // --- 金币纹理（程序化）---
+  const coinGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  coinGfx.fillStyle(0xffd700, 1.0);
+  coinGfx.fillCircle(8, 8, 7);
+  coinGfx.fillStyle(0xffee88, 0.8);
+  coinGfx.fillCircle(7, 7, 4);
+  coinGfx.lineStyle(1, 0xcc9900, 1);
+  coinGfx.strokeCircle(8, 8, 7);
+  coinGfx.generateTexture('coin_tex', 16, 16);
+  coinGfx.destroy();
+
+  // --- 荷花池点击区 & 荷花精灵 ---
+  const pond = LAYOUT.pond;
+  const pondCenterX = pond.x;
+  const pondCenterY = pond.y;
+
+  // 荷花sprite（位于池子中央偏左）
+  const lotusGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  // 荷叶底
+  lotusGfx.fillStyle(0x228b22, 0.9);
+  lotusGfx.fillEllipse(20, 24, 28, 14);
+  // 花瓣
+  const petalColors = [0xffb7c5, 0xff91a8, 0xffe0e8];
+  for (let i = 0; i < 6; i++) {
+    lotusGfx.fillStyle(petalColors[i % petalColors.length], 0.9);
+    const angle = (i / 6) * Math.PI * 2;
+    const px = 20 + Math.cos(angle) * 9;
+    const py = 14 + Math.sin(angle) * 7;
+    lotusGfx.fillEllipse(px, py, 8, 12);
+  }
+  // 花蕊
+  lotusGfx.fillStyle(0xffdd00, 1.0);
+  lotusGfx.fillCircle(20, 14, 4);
+  lotusGfx.generateTexture('lotus_tex', 40, 32);
+  lotusGfx.destroy();
+
+  const lotusSprite = this.add.sprite(pondCenterX - 30, pondCenterY - 10, 'lotus_tex');
+  lotusSprite.setDepth(pond.depth + 1);
+  lotusSprite.setScale(1.2);
+  lotusSprite.setInteractive({ useHandCursor: true });
+
+  // --- 荷花点击：3帧绽放动画 + 花瓣粒子爆发 ---
+  let lotusBlooming = false;
+  const lotusEmitter = this.add.particles(0, 0, particleTextures.petal || 'petal_tex', {
+    lifespan: 1500,
+    speedX: { min: -80, max: 80 },
+    speedY: { min: -120, max: -30 },
+    scale: { start: 0.6, end: 0.1 },
+    alpha: { start: 1.0, end: 0.0 },
+    tint: [0xffb7c5, 0xff91a8, 0xffe0e8, 0xffd0dd],
+    rotate: { min: -180, max: 180 },
+    frequency: 30,
+    quantity: 3,
+    emitting: false,
+    gravityY: 80
+  });
+  lotusEmitter.setDepth(pond.depth + 2);
+
+  lotusSprite.on('pointerdown', () => {
+    if (lotusBlooming) return;
+    lotusBlooming = true;
+    lotusEmitter.setPosition(lotusSprite.x, lotusSprite.y);
+    lotusEmitter.explode(12);
+    // 3帧绽放：scale 1.2→1.8→2.2→1.2
+    this.tweens.add({
+      targets: lotusSprite,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      alpha: 1,
+      duration: 200,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: lotusSprite,
+          scaleX: 2.2,
+          scaleY: 2.2,
+          duration: 200,
+          ease: 'Cubic.easeOut',
+          onComplete: () => {
+            this.tweens.add({
+              targets: lotusSprite,
+              scaleX: 1.2,
+              scaleY: 1.2,
+              duration: 400,
+              ease: 'Cubic.easeIn',
+              onComplete: () => { lotusBlooming = false; }
+            });
+          }
+        });
+      }
+    });
+  });
+
+  // --- 鲤鱼跳跃动画（程序化sprite）---
+  const koiGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  // 鱼身橙色
+  koiGfx.fillStyle(0xff6600, 1.0);
+  koiGfx.fillEllipse(24, 10, 36, 14);
+  // 白色花纹
+  koiGfx.fillStyle(0xffffff, 0.7);
+  koiGfx.fillEllipse(18, 9, 14, 8);
+  // 鱼鳍
+  koiGfx.fillStyle(0xff8833, 0.9);
+  koiGfx.fillTriangle(0, 10, 8, 4, 8, 16);
+  // 鱼尾
+  koiGfx.fillStyle(0xff5500, 0.9);
+  koiGfx.fillTriangle(40, 10, 48, 2, 48, 18);
+  // 鱼眼
+  koiGfx.fillStyle(0x000000, 1.0);
+  koiGfx.fillCircle(8, 8, 2);
+  koiGfx.generateTexture('koi_tex', 48, 20);
+  koiGfx.destroy();
+
+  // 隐藏的鲤鱼精灵池（可复用）
+  const koiPool = [];
+  for (let i = 0; i < 3; i++) {
+    const koi = this.add.sprite(pondCenterX, pondCenterY, 'koi_tex');
+    koi.setDepth(pond.depth + 2);
+    koi.setVisible(false);
+    koiPool.push(koi);
+  }
+
+  // 水花粒子发射器
+  const splashEmitter = this.add.particles(0, 0, particleTextures.waterdrop || 'waterdrop_tex', {
+    lifespan: 800,
+    speedX: { min: -60, max: 60 },
+    speedY: { min: -150, max: -50 },
+    scale: { start: 0.8, end: 0.1 },
+    alpha: { start: 0.8, end: 0.0 },
+    tint: 0x88ccff,
+    frequency: -1,
+    quantity: 8,
+    gravityY: 300,
+    emitting: false
+  });
+  splashEmitter.setDepth(pond.depth + 3);
+
+  // 金币粒子发射器
+  const coinEmitter = this.add.particles(0, 0, 'coin_tex', {
+    lifespan: 1200,
+    speedX: { min: -50, max: 50 },
+    speedY: { min: -200, max: -80 },
+    scale: { start: 0.5, end: 0.3 },
+    alpha: { start: 1.0, end: 0.0 },
+    tint: 0xffd700,
+    frequency: -1,
+    quantity: 5,
+    gravityY: 200,
+    emitting: false
+  });
+  coinEmitter.setDepth(pond.depth + 3);
+
+  // --- 荷花池点击区（透明矩形，触发鲤鱼跳跃）---
+  const pondZone = this.add.rectangle(
+    pondCenterX, pondCenterY,
+    pond.width, pond.height,
+    0x000000, 0
+  );
+  pondZone.setDepth(pond.depth);
+  pondZone.setInteractive({ useHandCursor: true });
+
+  let koiJumping = false;
+  let koiPoolIndex = 0;
+
+  function spawnKoiJump() {
+    if (koiJumping) return;
+    koiJumping = true;
+    const koi = koiPool[koiPoolIndex % koiPool.length];
+    koiPoolIndex++;
+    const startX = pondCenterX - 40 + Math.random() * 80;
+    const startY = pondCenterY;
+    koi.setPosition(startX, startY);
+    koi.setVisible(true);
+    koi.setRotation(0);
+    koi.setAlpha(1);
+    koi.setFlipX(false);
+
+    // 水花爆发
+    splashEmitter.setPosition(startX, startY + 5);
+    splashEmitter.explode(10);
+
+    // 跳跃弧线
+    const jumpHeight = 60 + Math.random() * 40;
+    const jumpForward = (Math.random() > 0.5 ? 1 : -1) * (30 + Math.random() * 30);
+    this.tweens.add({
+      targets: koi,
+      y: startY - jumpHeight,
+      x: startX + jumpForward,
+      rotation: Math.PI * 0.5 * (Math.random() > 0.5 ? 1 : -1),
+      duration: 350,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        // 落水
+        splashEmitter.setPosition(koi.x, koi.y + 5);
+        splashEmitter.explode(8);
+        // 金币爆发
+        coinEmitter.setPosition(koi.x, koi.y);
+        coinEmitter.explode(6);
+        this.tweens.add({
+          targets: koi,
+          y: startY,
+          alpha: 0,
+          rotation: koi.rotation + Math.PI * 0.3,
+          duration: 350,
+          ease: 'Cubic.easeIn',
+          onComplete: () => {
+            koi.setVisible(false);
+            koiJumping = false;
+          }
+        });
+      }
+    });
+  }
+
+  pondZone.on('pointerdown', spawnKoiJump);
+
+  // --- 荷花池视觉装饰（简单的水底色块）---
+  const pondGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  pondGfx.fillStyle(0x1a5f7a, 0.6);
+  pondGfx.fillEllipse(140, 60, 280, 100);
+  pondGfx.fillStyle(0x2980b9, 0.3);
+  pondGfx.fillEllipse(130, 50, 240, 80);
+  pondGfx.generateTexture('pond_tex', 280, 120);
+  pondGfx.destroy();
+  const pondBg = this.add.sprite(pondCenterX, pondCenterY, 'pond_tex');
+  pondBg.setDepth(pond.depth);
+  // 水面轻微波动动画
+  this.tweens.add({
+    targets: pondBg,
+    scaleX: 1.01,
+    duration: 2000,
+    yoyo: true,
+    repeat: -1,
+    ease: 'Sine.easeInOut'
+  });
 
   // === 沙发（来自 LAYOUT）===
   if (_t('sofa_busy')) {
@@ -457,6 +972,8 @@ function create() {
       workstationSprites[agentId + '_nameTag'] = nameTag;
     }
     window.workstationSprites = workstationSprites;
+    // 角色行走系统初始化
+    initCharacterWalkers();
   }
 
   if (_t('star_idle')) {
@@ -745,9 +1262,11 @@ function create() {
   }
 }
 
-function update(time) {
+function update(time, delta) {
   if (time - lastFetch > FETCH_INTERVAL) { fetchStatus(); lastFetch = time; }
   if (time - lastAgentsFetch > AGENTS_FETCH_INTERVAL) { fetchAgents(); lastAgentsFetch = time; }
+  updateParticles(time);
+  updateCharacterWalkers(time, delta);
 
   const effectiveStateForServer = pendingDesiredState || currentState;
   if (serverroom) {

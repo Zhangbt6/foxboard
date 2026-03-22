@@ -1,4 +1,4 @@
-import { LayoutDashboard, Kanban, Users, GitBranch, Activity, ListTodo, Grid, Folder } from 'lucide-react';
+import { LayoutDashboard, Kanban, Users, GitBranch, Activity, Grid, Folder } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ProjectSelector from './ProjectSelector';
 
@@ -9,7 +9,7 @@ const navItems = [
   { to: '/agents', icon: Users, label: '成员状态' },
   { to: '/workflow', icon: GitBranch, label: '流程图' },
   { to: '/activity', icon: Activity, label: '事件流' },
-  { to: '/my-tasks', icon: ListTodo, label: '我的任务' },
+  // { to: '/my-tasks', icon: ListTodo, label: '我的任务' },  // Phase 10: 已下架，后续并入看板
   { to: '/office', icon: Grid, label: '像素办公室' },
 ];
 
@@ -79,7 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           fontSize: 11,
           color: '#475569',
         }}>
-          v0.8.0 · Phase 9
+          v1.0.0 · Phase 10
         </div>
       </nav>
 

@@ -17,6 +17,8 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   MarkerType,
+  Handle,
+  Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { getWorkflows, getWorkflowNodes, getTask, getTasks } from '../api/client';
@@ -108,6 +110,10 @@ function StepNode({ data }: {
 
   return (
     <div style={{ minWidth: 160, textAlign: 'center' }}>
+      <Handle type="target" position={Position.Left} style={{ background: data.color, width: 8, height: 8 }} />
+      <Handle type="target" position={Position.Top} id="top" style={{ background: data.color, width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Right} style={{ background: data.color, width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: data.color, width: 8, height: 8 }} />
       <style>{`
         @keyframes blink-blocked {
           0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
@@ -237,9 +243,16 @@ function buildNodes(
     const color = STATUS_COLORS[status] ?? meta.ownerColor;
     const taskMeta = state?.task_id ? (taskMetas[state.task_id] ?? null) : null;
 
+    const idx = Object.keys(STEP_META).indexOf(nodeId);
+    const cols = Math.min(Object.keys(STEP_META).length, 4);
+    const row = Math.floor(idx / cols);
+    const col = idx % cols;
+    // Serpentine layout: even rows L→R, odd rows R→L
+    const actualCol = row % 2 === 0 ? col : (cols - 1 - col);
+
     return {
       id: nodeId,
-      position: { x: 0, y: 0 },
+      position: { x: actualCol * 260 + 40, y: row * 200 + 40 },
       data: {
         label: meta.label,
         owner: meta.owner,
@@ -318,7 +331,7 @@ function buildEdges(
       source: from,
       target: to,
       type: 'smoothstep',
-      animated: false,
+      animated: depStatus === 'flow',
       style: { stroke: style.stroke, strokeWidth: 2, ...(style.strokeDasharray ? { strokeDasharray: style.strokeDasharray } : {}) },
       markerEnd: { type: MarkerType.ArrowClosed, color: style.stroke },
     });
