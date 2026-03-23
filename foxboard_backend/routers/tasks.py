@@ -559,6 +559,9 @@ def update_task(task_id: str, payload: TaskUpdate):
     # FB-051: 同步工作流节点状态
     _sync_workflow_node_for_task(task_id, task.status)
 
+    # FB-097: WebSocket 实时推送（修复 update 后不广播的问题）
+    _broadcast_task_change(task_id, "updated", task.model_dump())
+
     return task
 
 
