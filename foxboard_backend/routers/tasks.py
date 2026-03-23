@@ -383,12 +383,12 @@ def create_task(payload: TaskCreate):
     task_status = payload.status.value if payload.status else "TODO"
     try:
         cursor.execute("""
-            INSERT INTO tasks (id, title, description, status, priority, assignee_id, project_id, tags, depends_on, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, title, description, status, priority, assignee_id, project_id, tags, depends_on, phase_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             payload.id, payload.title, payload.description, task_status,
             payload.priority, payload.assignee_id, payload.project_id,
-            payload.tags, payload.depends_on, now, now
+            payload.tags, payload.depends_on, payload.phase_id, now, now
         ))
         conn.commit()
     except sqlite3.IntegrityError:
@@ -521,6 +521,7 @@ def update_task(task_id: str, payload: TaskUpdate):
             project_id = COALESCE(?, project_id),
             tags = COALESCE(?, tags),
             depends_on = COALESCE(?, depends_on),
+            phase_id = COALESCE(?, phase_id),
             started_at = ?,
             completed_at = ?,
             updated_at = ?
@@ -528,7 +529,7 @@ def update_task(task_id: str, payload: TaskUpdate):
     """, (
         payload.title, payload.description, new_status,
         payload.priority, payload.assignee_id, payload.project_id,
-        payload.tags, payload.depends_on,
+        payload.tags, payload.depends_on, payload.phase_id,
         new_started_at, new_completed_at, now, task_id
     ))
     conn.commit()
