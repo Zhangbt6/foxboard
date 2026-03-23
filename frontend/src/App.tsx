@@ -9,6 +9,7 @@ import Activity from './pages/Activity';
 import MyTasks from './pages/MyTasks';
 import Office from './pages/Office';
 import Projects from './pages/Projects';
+import Messages from './pages/Messages';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
             <Route path="/activity" element={<Activity />} />
             <Route path="/my-tasks" element={<MyTasks />} />
             <Route path="/office" element={<Office />} />
+            <Route path="/messages" element={<Messages />} />
           </Routes>
         </Layout>
       </BrowserRouter>
