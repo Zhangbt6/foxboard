@@ -237,6 +237,31 @@ def migrate_add_phases():
     print("[DB] 迁移：phases 表 + tasks.phase_id 列就绪")
 
 
+def migrate_add_is_online():
+    """v0.12.0 迁移：agents 表新增 is_online 字段（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(agents)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if "is_online" not in cols:
+        cursor.execute("ALTER TABLE agents ADD COLUMN is_online INTEGER NOT NULL DEFAULT 0")
+        print("[DB] 迁移：agents 表新增 is_online 字段")
+    conn.commit()
+    conn.close()
+
+def migrate_add_capability_tags():
+    """v0.12.0 迁移：agents 表新增 capability_tags 字段（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(agents)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if "capability_tags" not in cols:
+        cursor.execute("ALTER TABLE agents ADD COLUMN capability_tags TEXT DEFAULT ''")
+        print("[DB] 迁移：agents 表新增 capability_tags 字段")
+    conn.commit()
+    conn.close()
+
+
 if __name__ == "__main__":
     init_db()
     migrate_add_columns()

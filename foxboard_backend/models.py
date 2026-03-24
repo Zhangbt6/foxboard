@@ -78,6 +78,8 @@ class Agent(BaseModel):
     priority: int = 0
     last_heartbeat: Optional[str] = None
     state_detail: Optional[str] = None
+    is_online: bool = False
+    capability_tags: str = ""
     created_at: str
     updated_at: str
 
