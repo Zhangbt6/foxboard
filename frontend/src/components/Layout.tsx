@@ -7,6 +7,7 @@ const navItems = [
   { to: '/projects', icon: Folder, label: '项目列表' },
   { to: '/kanban', icon: Kanban, label: '看板' },
   { to: '/agents', icon: Users, label: '成员状态' },
+  { to: '/agents-dashboard', icon: Activity, label: 'Agent看板' },
   { to: '/workflow', icon: GitBranch, label: '流程图' },
   { to: '/activity', icon: Activity, label: '事件流' },
   // { to: '/my-tasks', icon: ListTodo, label: '我的任务' },  // Phase 10: 已下架，后续并入看板
