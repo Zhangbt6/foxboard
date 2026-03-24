@@ -11,6 +11,7 @@ import MyTasks from './pages/MyTasks';
 import Office from './pages/Office';
 import Projects from './pages/Projects';
 import Messages from './pages/Messages';
+import DispatchPanel from './pages/DispatchPanel';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/my-tasks" element={<MyTasks />} />
             <Route path="/office" element={<Office />} />
             <Route path="/messages" element={<Messages />} />
+            <Route path="/dispatch" element={<DispatchPanel />} />
           </Routes>
         </Layout>
       </BrowserRouter>
