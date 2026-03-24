@@ -305,3 +305,77 @@ def update_agent_capabilities(agent_id: str, payload: dict):
     row = cursor.fetchone()
     conn.close()
     return row_to_agent(row)
+
+@router.post("/{agent_id}/sync-skills", response_model=Agent)
+def sync_agent_skills(agent_id: str):
+    """
+    扫描本地 OpenClaw Skills 目录，将已安装的 skill 名称同步到 Agent capability_tags。
+    读取 ~/.openclaw/skills/ 和 ~/.npm-global/lib/node_modules/openclaw/skills/ 下每个 skill 的 SKILL.md，
+    解析 name 字段，追加到 capability_tags（自动去重）。
+    """
+    import os
+    import re
+    from pathlib import Path
+
+    skill_dirs = [
+        Path.home() / ".openclaw" / "skills",
+        Path("/home/muyin/.npm-global/lib/node_modules/openclaw/skills"),
+    ]
+
+    discovered_skills = set()
+    for skills_root in skill_dirs:
+        if not skills_root.exists():
+            continue
+        for entry in skills_root.iterdir():
+            if not entry.is_dir():
+                continue
+            skill_md = entry / "SKILL.md"
+            if not skill_md.exists():
+                continue
+            try:
+                content = skill_md.read_text(encoding="utf-8")
+                # Parse YAML frontmatter name field
+                match = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+                if match:
+                    frontmatter = match.group(1)
+                    name_match = re.search(r'^name:\s*["\']?([^"\'\n]+)["\']?', frontmatter, re.MULTILINE)
+                    if name_match:
+                        discovered_skills.add(name_match.group(1).strip())
+            except Exception:
+                continue
+
+    if not discovered_skills:
+        # No skills found, return current tags unchanged
+        conn = get_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        return row_to_agent(row)
+
+    # Merge with existing tags (dedup)
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+    existing = row["capability_tags"] or ""
+    existing_tags = set(t.strip() for t in existing.split(",") if t.strip())
+    merged = existing_tags | discovered_skills
+    new_tags = ",".join(sorted(merged))
+
+    now = datetime.utcnow().isoformat()
+    cursor.execute(
+        "UPDATE agents SET capability_tags = ?, updated_at = ? WHERE id = ?",
+        (new_tags, now, agent_id)
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row_to_agent(row)
