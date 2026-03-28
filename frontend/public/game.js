@@ -36,6 +36,13 @@ class SkyDisc {
     this.canvas = null;
     this.ctx = null;
     this.size = options.size || 512;
+    this.radius = options.radius || Math.floor(this.size / 2);
+    this.yOffset = options.yOffset || 0;
+    this.clipRect = options.clipRect || null; // {x,y,width,height}
+    this.imageUrl = options.imageUrl || '';
+    this.discImage = null;
+    this.imageReady = false;
+    this.imageFailed = false;
     this._rafId = null;
   }
 
@@ -43,6 +50,7 @@ class SkyDisc {
     if (this.running) return;
     this.running = true;
     this._ensureCanvas();
+    this._loadDiscImage();
     this._animate();
   }
 
@@ -62,6 +70,7 @@ class SkyDisc {
     if (this.canvas) return;
     const container = document.getElementById(this.containerId);
     if (!container) return;
+    container.style.position = container.style.position || 'relative';
 
     // 创建 canvas（位于 Phaser canvas 下方，覆盖全画面作为天空层）
     this.canvas = document.createElement('canvas');
@@ -91,6 +100,52 @@ class SkyDisc {
     }
   }
 
+  _loadDiscImage() {
+    if (!this.imageUrl || this.discImage || this.imageFailed) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      this.discImage = img;
+      this.imageReady = true;
+    };
+    img.onerror = () => {
+      this.imageFailed = true;
+      this.imageReady = false;
+      console.warn('[SkyDisc] Failed to load image:', this.imageUrl);
+    };
+    img.src = this.imageUrl;
+  }
+
+  _drawFallbackSky(angle) {
+    const { ctx } = this;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    ctx.save();
+    ctx.translate(w / 2, h * 0.3);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.translate(-w / 2, -h * 0.3);
+
+    const stars = [
+      { x: 100, y: 30, r: 2, b: 1.0 }, { x: 300, y: 60, r: 1.5, b: 0.8 },
+      { x: 500, y: 20, r: 2, b: 0.9 }, { x: 700, y: 50, r: 1, b: 0.6 },
+      { x: 900, y: 35, r: 1.5, b: 0.7 }, { x: 150, y: 100, r: 2, b: 1.0 },
+      { x: 400, y: 120, r: 1, b: 0.5 }, { x: 600, y: 90, r: 1.5, b: 0.8 },
+      { x: 800, y: 110, r: 2, b: 0.9 }, { x: 1000, y: 45, r: 1, b: 0.6 },
+      { x: 1100, y: 80, r: 1.5, b: 0.7 }, { x: 200, y: 150, r: 1, b: 0.5 }
+    ];
+    for (const s of stars) {
+      const flicker = 0.7 + 0.3 * Math.sin(Date.now() / 500 + s.x);
+      ctx.globalAlpha = 0.55 * s.b * flicker;
+      ctx.fillStyle = '#fffde7';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   _drawSkyDisc(angle) {
     const { ctx } = this;
     const w = this.canvas.width;
@@ -98,54 +153,46 @@ class SkyDisc {
 
     ctx.clearRect(0, 0, w, h);
 
-    // 全画面天空渐变（深夜主题）
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#0a0a1e');   // 顶部深空
-    grad.addColorStop(0.3, '#1a1a3e');  // 中部星空
-    grad.addColorStop(0.6, '#2d1b69');  // 下部紫霞
-    grad.addColorStop(1, '#0f1f3d');    // 底部深蓝
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // 星辰（随角度缓慢旋转产生运动感）
+    // 限定天空盘只在背景可见矩形内渲染
     ctx.save();
-    ctx.translate(w / 2, h * 0.3);
-    ctx.rotate(angle * Math.PI / 180);
-    ctx.translate(-w / 2, -h * 0.3);
-
-    const stars = [
-      { x: 100, y: 30, r: 2, b: 1.0 },
-      { x: 300, y: 60, r: 1.5, b: 0.8 },
-      { x: 500, y: 20, r: 2, b: 0.9 },
-      { x: 700, y: 50, r: 1, b: 0.6 },
-      { x: 900, y: 35, r: 1.5, b: 0.7 },
-      { x: 150, y: 100, r: 2, b: 1.0 },
-      { x: 400, y: 120, r: 1, b: 0.5 },
-      { x: 600, y: 90, r: 1.5, b: 0.8 },
-      { x: 800, y: 110, r: 2, b: 0.9 },
-      { x: 1000, y: 45, r: 1, b: 0.6 },
-      { x: 1100, y: 80, r: 1.5, b: 0.7 },
-      { x: 200, y: 150, r: 1, b: 0.5 },
-      { x: 450, y: 170, r: 2, b: 0.8 },
-      { x: 750, y: 160, r: 1.5, b: 0.9 },
-      { x: 1050, y: 130, r: 1, b: 0.6 },
-      { x: 250, y: 200, r: 1.5, b: 0.7 },
-      { x: 550, y: 210, r: 2, b: 0.8 },
-      { x: 850, y: 190, r: 1, b: 0.5 },
-      { x: 1150, y: 170, r: 1.5, b: 0.9 },
-      { x: 50, y: 70, r: 1, b: 0.6 },
-    ];
-
-    for (const s of stars) {
-      const flicker = 0.7 + 0.3 * Math.sin(Date.now() / 500 + s.x);
-      ctx.globalAlpha = s.b * flicker;
-      ctx.fillStyle = '#fffde7';
+    if (this.clipRect) {
       ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.rect(this.clipRect.x, this.clipRect.y, this.clipRect.width, this.clipRect.height);
+      ctx.clip();
     }
 
-    ctx.globalAlpha = 1;
+    if (!this.imageReady || !this.discImage) {
+      this._drawFallbackSky(angle);
+      ctx.restore();
+      return;
+    }
+
+    const cx = Math.floor(w / 2);
+    const cy = Math.floor(h * 0.18 + this.yOffset);
+    const r = this.radius;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+
+    // 单层贴图旋转，避免多层叠色导致“多时间天空”观感
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.globalAlpha = 0.95;
+    ctx.drawImage(this.discImage, -r, -r, r * 2, r * 2);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(150,190,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
     ctx.restore();
   }
 
@@ -156,6 +203,7 @@ class SkyDisc {
       const delta = now - this.lastTime;
       this.angle += this.degreesPerSecond * this.speed * (delta / 1000);
       if (this.angle >= 360) this.angle -= 360;
+      if (this.angle < 0) this.angle += 360;
       this._drawSkyDisc(this.angle);
     }
     this.lastTime = now;
@@ -202,7 +250,11 @@ const config = {
   width: LAYOUT.game.width,
   height: LAYOUT.game.height,
   parent: 'game-container',
-  // transparent: true,  // 等背景PNG化+绿幕去除后再开
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
+  transparent: true,
   pixelArt: true,
   physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
   scene: { preload: preload, create: create, update: update }
@@ -361,6 +413,30 @@ const TYPEWRITER_DELAY = 50;
 let agents = {}; // agentId -> sprite/container
 let lastAgentsFetch = 0;
 const AGENTS_FETCH_INTERVAL = 2500;
+let phaserApp = null;
+const WORKSTATION_POSITIONS_KEY = 'foxboard_pixel_office_workstations_v1';
+
+function loadWorkstationPositions() {
+  try {
+    const raw = localStorage.getItem(WORKSTATION_POSITIONS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (_e) {
+    return {};
+  }
+}
+
+function saveWorkstationPosition(agentId, x, y) {
+  if (!agentId) return;
+  const positions = loadWorkstationPositions();
+  positions[agentId] = { x: Math.round(x), y: Math.round(y) };
+  try {
+    localStorage.setItem(WORKSTATION_POSITIONS_KEY, JSON.stringify(positions));
+  } catch (_e) {
+    // 忽略存储异常（隐私模式/容量限制）
+  }
+}
 
 // agent 颜色配置
 const AGENT_COLORS = {
@@ -425,6 +501,19 @@ function setState(state, detail) {
 
 // 初始化：先检测 WebP 支持，再启动游戏
 async function initGame() {
+  const container = document.getElementById('game-container');
+  if (!container) {
+    console.warn('[PixelOffice] #game-container not found, skip init.');
+    return null;
+  }
+  if (typeof Phaser === 'undefined') {
+    console.warn('[PixelOffice] Phaser not ready, skip init.');
+    return null;
+  }
+  if (phaserApp) {
+    return phaserApp;
+  }
+
   try {
     supportsWebP = await checkWebPSupport();
   } catch (e) {
@@ -436,7 +525,46 @@ async function initGame() {
   }
 
   console.log('WebP 支持:', supportsWebP);
-  new Phaser.Game(config);
+  phaserApp = new Phaser.Game(config);
+  return phaserApp;
+}
+
+function destroyGame() {
+  if (window.testNikaTimer) {
+    clearInterval(window.testNikaTimer);
+    window.testNikaTimer = null;
+  }
+
+  if (skyDisc) {
+    skyDisc.stop();
+    if (skyDisc.canvas && skyDisc.canvas.parentNode) {
+      skyDisc.canvas.parentNode.removeChild(skyDisc.canvas);
+    }
+    skyDisc.canvas = null;
+    skyDisc.ctx = null;
+    skyDisc = null;
+  }
+
+  if (phaserApp) {
+    phaserApp.destroy(true);
+    phaserApp = null;
+  }
+
+  const container = document.getElementById('game-container');
+  if (container) {
+    container.innerHTML = '';
+  }
+
+  agents = {};
+  lastFetch = 0;
+  lastAgentsFetch = 0;
+  walkSystemActive = false;
+  for (const id of Object.keys(characterWalkers)) {
+    delete characterWalkers[id];
+  }
+
+  if (window.workstationSprites) delete window.workstationSprites;
+  if (window.sparkManualAnim) delete window.sparkManualAnim;
 }
 
 function preload() {
@@ -785,18 +913,39 @@ function create() {
   game = this;
   const _t = (k) => this.textures.exists(k);
 
+  // --- LAYER 100: 背景主体（莲花池）---
+  // 使用 contain 缩放，确保整幅背景都能看见（不被过度放大裁切）
+  const bgSprite = this.add.image(LAYOUT.game.width / 2, LAYOUT.game.height / 2, 'office_bg').setDepth(LAYERS.BACKGROUND);
+  const bgTex = this.textures.get('office_bg');
+  if (bgTex && bgTex.getSourceImage) {
+    const src = bgTex.getSourceImage();
+    if (src && src.width && src.height) {
+      const sx = LAYOUT.game.width / src.width;
+      const sy = LAYOUT.game.height / src.height;
+      bgSprite.setScale(Math.min(sx, sy));
+    }
+  }
+
   // --- LAYER 0: 天空盘 (FB-087) ---
   if (LAYOUT.skyDisc && LAYOUT.skyDisc.enabled) {
+    const skyUrl = '/' + String(LAYOUT.skyDisc.imageUrl || '').replace(/^\/+/, '') + '?v=20260322d';
+    const bgBounds = bgSprite.getBounds();
     skyDisc = new SkyDisc('game-container', {
-      degreesPerSecond: 360 / (24 * 60),
-      speed: 1.0,
-      size: LAYOUT.skyDisc.size || 500
+      degreesPerSecond: LAYOUT.skyDisc.degreesPerSecond || (360 / (24 * 60)),
+      speed: LAYOUT.skyDisc.speed || 1.0,
+      size: LAYOUT.skyDisc.size || 500,
+      radius: LAYOUT.skyDisc.radius || Math.floor((LAYOUT.skyDisc.size || 500) / 2),
+      yOffset: LAYOUT.skyDisc.yOffset || 0,
+      clipRect: {
+        x: bgBounds.x,
+        y: bgBounds.y,
+        width: bgBounds.width,
+        height: bgBounds.height
+      },
+      imageUrl: skyUrl
     });
     skyDisc.start();
   }
-
-  // --- LAYER 100: 背景主体（莲花池） ---
-  this.add.image(640, 360, 'office_bg').setDepth(LAYERS.BACKGROUND);
 
   // --- 自然装饰物 ---
   if (LAYOUT.naturalDecorations) {
@@ -822,7 +971,7 @@ function create() {
 
   // ============================================================
   // 互动系统 - FB-089
-  // 点击荷花绽放 + 点击锦绣(鲤鱼)跳跃 + 水花 + 金币
+  // 点击荷花绽放 + 水面动态
   // ============================================================
 
   // --- 金币纹理（程序化）---
@@ -861,7 +1010,10 @@ function create() {
   lotusGfx.generateTexture('lotus_tex', 40, 32);
   lotusGfx.destroy();
 
-  const lotusSprite = this.add.sprite(pondCenterX - 30, pondCenterY - 10, 'lotus_tex');
+  // 交互荷花进一步左移，落在左侧池区
+  const lotusX = pondCenterX - Math.floor(pond.width * 1.05);
+  const lotusY = pondCenterY - 4;
+  const lotusSprite = this.add.sprite(lotusX, lotusY, 'lotus_tex');
   lotusSprite.setDepth(LAYERS.WATER + 1);
   lotusSprite.setScale(1.2);
   lotusSprite.setInteractive({ useHandCursor: true });
@@ -918,148 +1070,9 @@ function create() {
     });
   });
 
-  // --- 鲤鱼跳跃动画（程序化sprite）---
-  const koiGfx = this.make.graphics({ x: 0, y: 0, add: false });
-  // 鱼身橙色
-  koiGfx.fillStyle(0xff6600, 1.0);
-  koiGfx.fillEllipse(24, 10, 36, 14);
-  // 白色花纹
-  koiGfx.fillStyle(0xffffff, 0.7);
-  koiGfx.fillEllipse(18, 9, 14, 8);
-  // 鱼鳍
-  koiGfx.fillStyle(0xff8833, 0.9);
-  koiGfx.fillTriangle(0, 10, 8, 4, 8, 16);
-  // 鱼尾
-  koiGfx.fillStyle(0xff5500, 0.9);
-  koiGfx.fillTriangle(40, 10, 48, 2, 48, 18);
-  // 鱼眼
-  koiGfx.fillStyle(0x000000, 1.0);
-  koiGfx.fillCircle(8, 8, 2);
-  koiGfx.generateTexture('koi_tex', 48, 20);
-  koiGfx.destroy();
+  // 锦鲤交互先移除：保留荷花交互与水面动画
 
-  // 隐藏的鲤鱼精灵池（可复用）
-  const koiPool = [];
-  for (let i = 0; i < 3; i++) {
-    const koi = this.add.sprite(pondCenterX, pondCenterY, 'koi_tex');
-    koi.setDepth(LAYERS.WATER + 2);
-    koi.setVisible(false);
-    koiPool.push(koi);
-  }
-
-  // 水花粒子发射器
-  const splashEmitter = this.add.particles(0, 0, particleTextures.waterdrop || 'waterdrop_tex', {
-    lifespan: 800,
-    speedX: { min: -60, max: 60 },
-    speedY: { min: -150, max: -50 },
-    scale: { start: 0.8, end: 0.1 },
-    alpha: { start: 0.8, end: 0.0 },
-    tint: 0x88ccff,
-    frequency: -1,
-    quantity: 8,
-    gravityY: 300,
-    emitting: false
-  });
-  splashEmitter.setDepth(LAYERS.WATER + 3);
-
-  // 金币粒子发射器
-  const coinEmitter = this.add.particles(0, 0, 'coin_tex', {
-    lifespan: 1200,
-    speedX: { min: -50, max: 50 },
-    speedY: { min: -200, max: -80 },
-    scale: { start: 0.5, end: 0.3 },
-    alpha: { start: 1.0, end: 0.0 },
-    tint: 0xffd700,
-    frequency: -1,
-    quantity: 5,
-    gravityY: 200,
-    emitting: false
-  });
-  coinEmitter.setDepth(LAYERS.WATER + 3);
-
-  // --- 荷花池点击区（透明矩形，触发鲤鱼跳跃）---
-  const pondZone = this.add.rectangle(
-    pondCenterX, pondCenterY,
-    pond.width, pond.height,
-    0x000000, 0
-  );
-  pondZone.setDepth(LAYERS.WATER);
-  pondZone.setInteractive({ useHandCursor: true });
-
-  let koiJumping = false;
-  let koiPoolIndex = 0;
-
-  function spawnKoiJump() {
-    if (koiJumping) return;
-    koiJumping = true;
-    const koi = koiPool[koiPoolIndex % koiPool.length];
-    koiPoolIndex++;
-    const startX = pondCenterX - 40 + Math.random() * 80;
-    const startY = pondCenterY;
-    koi.setPosition(startX, startY);
-    koi.setVisible(true);
-    koi.setRotation(0);
-    koi.setAlpha(1);
-    koi.setFlipX(false);
-
-    // 水花爆发
-    splashEmitter.setPosition(startX, startY + 5);
-    splashEmitter.explode(10);
-
-    // 跳跃弧线
-    const jumpHeight = 60 + Math.random() * 40;
-    const jumpForward = (Math.random() > 0.5 ? 1 : -1) * (30 + Math.random() * 30);
-    this.tweens.add({
-      targets: koi,
-      y: startY - jumpHeight,
-      x: startX + jumpForward,
-      rotation: Math.PI * 0.5 * (Math.random() > 0.5 ? 1 : -1),
-      duration: 350,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        // 落水
-        splashEmitter.setPosition(koi.x, koi.y + 5);
-        splashEmitter.explode(8);
-        // 金币爆发
-        coinEmitter.setPosition(koi.x, koi.y);
-        coinEmitter.explode(6);
-        this.tweens.add({
-          targets: koi,
-          y: startY,
-          alpha: 0,
-          rotation: koi.rotation + Math.PI * 0.3,
-          duration: 350,
-          ease: 'Cubic.easeIn',
-          onComplete: () => {
-            koi.setVisible(false);
-            koiJumping = false;
-          }
-        });
-      }
-    });
-  }
-
-  pondZone.on('pointerdown', spawnKoiJump);
-
-  // --- 荷花池视觉装饰（简单的水底色块）---
-  const pondGfx = this.make.graphics({ x: 0, y: 0, add: false });
-  pondGfx.fillStyle(0x1a5f7a, 0.6);
-  pondGfx.fillEllipse(140, 60, 280, 100);
-  pondGfx.fillStyle(0x2980b9, 0.3);
-  pondGfx.fillEllipse(130, 50, 240, 80);
-  pondGfx.generateTexture('pond_tex', 280, 120);
-  pondGfx.destroy();
-  const pondBg = this.add.sprite(pondCenterX, pondCenterY, 'pond_tex');
-  pondBg.setDepth(LAYERS.WATER);
-  // 水面轻微波动动画
-  this.tweens.add({
-    targets: pondBg,
-    scaleX: 1.01,
-    duration: 2000,
-    yoyo: true,
-    repeat: -1,
-    ease: 'Sine.easeInOut'
-  });
+  // 中央蓝色水底块已移除：避免覆盖背景池面细节
 
   // === 沙发（来自 LAYOUT）===
   if (_t('sofa_busy')) {
@@ -1103,43 +1116,39 @@ function create() {
     });
   }
 
-  // 花火像素小人：先接 idle / wave / wiggle / think 四套动画
-  this.anims.create({
-    key: 'spark_idle_anim',
-    frames: this.anims.generateFrameNumbers('spark_idle', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'spark_wave_anim',
-    frames: this.anims.generateFrameNumbers('spark_wave', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'spark_wiggle_anim',
-    frames: this.anims.generateFrameNumbers('spark_wiggle', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
-  this.anims.create({
-    key: 'spark_think_anim',
-    frames: this.anims.generateFrameNumbers('spark_think', { start: 0, end: 3 }),
-    frameRate: 8,
-    repeat: -1
-  });
+  // 通用：仅对 4 帧 spritesheet 生成动画
+  const createAnimIfAvailable = (textureKey, animKey, frameRate = 8, reverse = false) => {
+    if (!this.textures.exists(textureKey)) return false;
+    const tex = this.textures.get(textureKey);
+    if (!tex || tex.frameTotal < 4) return false;
+    if (this.anims.exists(animKey)) return true;
+    const frames = reverse
+      ? this.anims.generateFrameNumbers(textureKey, { start: 3, end: 0 })
+      : this.anims.generateFrameNumbers(textureKey, { start: 0, end: 3 });
+    this.anims.create({
+      key: animKey,
+      frames,
+      frameRate,
+      repeat: -1
+    });
+    return true;
+  };
 
-  // === 四狐多角色：其它三只狐狸的动画（当前只有idle，用同一张图）===
-  const foxNames = ['qingfox', 'whitefox', 'blackfox', 'fox_bluefox'];
+  // 花火四套动画
+  createAnimIfAvailable('spark_idle', 'spark_idle_anim', 4);
+  createAnimIfAvailable('spark_wave', 'spark_wave_anim', 4);
+  createAnimIfAvailable('spark_wiggle', 'spark_wiggle_anim', 4);
+  createAnimIfAvailable('spark_think', 'spark_think_anim', 4);
+  createAnimIfAvailable('spark_working', 'spark_working_anim', 4);
+  createAnimIfAvailable('spark_walk', 'spark_walk_anim', 4);
+  createAnimIfAvailable('spark_sit', 'spark_sit_anim', 4);
+
+  // 三狐动画：用各自资源，不复用花火
+  const foxNames = ['qingfox', 'whitefox', 'blackfox'];
+  const foxActions = ['idle', 'wave', 'working', 'think', 'wiggle', 'walk', 'sit'];
   for (const fox of foxNames) {
-    const textureKey = fox + '_idle';
-    if (this.textures.exists(textureKey)) {
-      this.anims.create({
-        key: fox + '_idle_anim',
-        frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 3 }),
-        frameRate: 8,
-        repeat: -1
-      });
+    for (const action of foxActions) {
+      createAnimIfAvailable(`${fox}_${action}`, `${fox}_${action}_anim`, 3, fox === 'qingfox');
     }
   }
 
@@ -1151,15 +1160,41 @@ function create() {
   const workstationSprites = {};
 
   if (WS) {
+    const savedPositions = loadWorkstationPositions();
     // 新版：四工位模式，从 OFFICE_LAYOUT 读取
     for (const ws of WS) {
       const agentId = ws.agentId;
-      // 找第一个可用的 spritesheet
+      const saved = savedPositions[agentId];
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+        ws.x = saved.x;
+        ws.y = saved.y;
+      }
+      // 优先使用可动画化的 idle 资源
       let spriteKey = null;
-      const candidates = ws.sprites ? Object.values(ws.sprites) : [];
-      for (const c of candidates) {
-        const tex = c.replace('/sprites/', '').replace('.webp', '').replace('.png', '');
-        if (game.textures.exists(tex)) { spriteKey = tex; break; }
+      const preferred = [
+        ws.id + '_idle',
+        ws.id + '_working',
+        ws.id + '_wave',
+        ws.id + '_think',
+        ws.id + '_wiggle',
+        ws.id + '_walk',
+        ws.id + '_sit'
+      ];
+      for (const key of preferred) {
+        if (!game.textures.exists(key)) continue;
+        const tex = this.textures.get(key);
+        if (tex && tex.frameTotal >= 4) {
+          spriteKey = key;
+          break;
+        }
+      }
+      if (!spriteKey) {
+        for (const key of preferred) {
+          if (game.textures.exists(key)) {
+            spriteKey = key;
+            break;
+          }
+        }
       }
       if (!spriteKey) spriteKey = 'spark_idle'; // fallback
 
@@ -1167,7 +1202,12 @@ function create() {
       sp.setOrigin(0.5);
       sp.setDepth(ws.depth || LAYERS.CHARACTERS);
       sp.setVisible(true);
-      sp.anims.play(spriteKey + '_anim', true);
+      if (ws.id === 'qingfox') {
+        sp.setFlipX(true);
+      }
+      if (this.anims.exists(spriteKey + '_anim')) {
+        sp.anims.play(spriteKey + '_anim', true);
+      }
       workstationSprites[agentId] = sp;
 
       // 名字标签
@@ -1180,6 +1220,54 @@ function create() {
       }).setOrigin(0.5);
       nameTag.setDepth(LAYERS.TEXT);
       workstationSprites[agentId + '_nameTag'] = nameTag;
+
+      // 可拖动位置：运行时调整工位摆放
+      sp.setInteractive({ useHandCursor: true, draggable: true });
+      this.input.setDraggable(sp);
+      sp.on('dragstart', () => {
+        const walker = characterWalkers[agentId];
+        if (walker) {
+          walker.isMoving = false;
+        }
+      });
+      sp.on('drag', (_pointer, dragX, dragY) => {
+        sp.x = dragX;
+        sp.y = dragY;
+        nameTag.x = dragX;
+        nameTag.y = dragY - 42;
+        const walker = characterWalkers[agentId];
+        if (walker) {
+          walker.x = dragX;
+          walker.y = dragY;
+          walker.targetX = dragX;
+          walker.targetY = dragY;
+        }
+      });
+      sp.on('dragend', () => {
+        const walker = characterWalkers[agentId];
+        if (walker) {
+          walker.homeX = sp.x;
+          walker.homeY = sp.y;
+          walker.x = sp.x;
+          walker.y = sp.y;
+          walker.moveTimer = 0;
+        }
+        saveWorkstationPosition(agentId, sp.x, sp.y);
+      });
+
+      // 点击切换花火动画
+      if (ws.id === 'spark') {
+        const cycle = ['spark_idle_anim', 'spark_wave_anim', 'spark_wiggle_anim', 'spark_think_anim'];
+        let cycleIndex = Math.max(0, cycle.indexOf(sp.anims?.currentAnim?.key || 'spark_idle_anim'));
+        sp.on('pointerdown', () => {
+          cycleIndex = (cycleIndex + 1) % cycle.length;
+          const anim = cycle[cycleIndex];
+          window.sparkManualAnim = anim;
+          if (game.anims.exists(anim)) {
+            sp.anims.play(anim, true);
+          }
+        });
+      }
     }
     window.workstationSprites = workstationSprites;
     // 角色行走系统初始化
@@ -1807,18 +1895,18 @@ function getAreaPosition(area, slotIndex) {
   return positions[idx];
 }
 
-// 四狐多角色：状态→动画映射
-const FOX_ANIM_MAP = {
-  'idle': '_idle_anim',
-  'TODO': '_idle_anim',
-  'DOING': '_idle_anim',   // working状态暂无，用idle代替
-  'REVIEW': '_idle_anim', // think状态暂无，用idle代替
-  'DONE': '_idle_anim',   // wave状态暂无，用idle代替
-  'writing': '_idle_anim',
-  'researching': '_idle_anim',
-  'executing': '_idle_anim',
-  'syncing': '_idle_anim',
-  'error': '_idle_anim'
+// 四狐多角色：状态→动作映射
+const FOX_ACTION_MAP = {
+  'idle': 'idle',
+  'TODO': 'idle',
+  'DOING': 'working',
+  'REVIEW': 'think',
+  'DONE': 'wave',
+  'writing': 'wave',
+  'researching': 'think',
+  'executing': 'working',
+  'syncing': 'working',
+  'error': 'working'
 };
 
 function getFoxSpriteKey(agentId) {
@@ -1833,8 +1921,12 @@ function getFoxSpriteKey(agentId) {
 function getFoxAnimKey(agentId, state) {
   const base = getFoxSpriteKey(agentId);
   if (!base) return null;
-  const suffix = FOX_ANIM_MAP[state] || FOX_ANIM_MAP['idle'];
-  return base + suffix;
+  const action = FOX_ACTION_MAP[state] || FOX_ACTION_MAP['idle'];
+  const preferred = `${base}_${action}_anim`;
+  if (game && game.anims && game.anims.exists(preferred)) return preferred;
+  const fallback = `${base}_idle_anim`;
+  if (game && game.anims && game.anims.exists(fallback)) return fallback;
+  return preferred;
 }
 
 function updateWorkstationSprites(agentData) {
@@ -1848,7 +1940,10 @@ function updateWorkstationSprites(agentData) {
   const sp = ws[agentId];
   if (!sp) return;
 
-  const animKey = getFoxAnimKey(agentId, status);
+  let animKey = getFoxAnimKey(agentId, status);
+  if (agentId === 'fox_leader' && window.sparkManualAnim && game.anims.exists(window.sparkManualAnim)) {
+    animKey = window.sparkManualAnim;
+  }
   if (!animKey) return;
 
   const textureKey = animKey.replace('_anim', '');
@@ -2013,5 +2108,13 @@ function renderAgent(agent) {
   }
 }
 
-// 启动游戏
-initGame();
+// 暴露给 React 页面做生命周期控制
+if (typeof window !== 'undefined') {
+  window.__FOXBOARD_PIXEL_OFFICE_INIT = initGame;
+  window.__FOXBOARD_PIXEL_OFFICE_DESTROY = destroyGame;
+}
+
+// 兼容独立 office.html：未声明手动托管时自动启动
+if (typeof window !== 'undefined' && !window.__FOXBOARD_PIXEL_OFFICE_MANUAL_BOOT__) {
+  initGame();
+}

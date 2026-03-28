@@ -1,40 +1,91 @@
 import { useEffect, useRef } from 'react';
 import { installFetchInterceptor } from './OfficeAdapter';
 
+declare global {
+  interface Window {
+    __FOXBOARD_PIXEL_OFFICE_INIT?: () => Promise<unknown> | unknown;
+    __FOXBOARD_PIXEL_OFFICE_DESTROY?: () => void;
+    __FOXBOARD_PIXEL_OFFICE_MANUAL_BOOT__?: boolean;
+    __FOXBOARD_SCRIPT_PROMISES__?: Partial<Record<string, Promise<void>>>;
+  }
+}
+
+function loadScriptOnce(key: string, src: string): Promise<void> {
+  if (!window.__FOXBOARD_SCRIPT_PROMISES__) {
+    window.__FOXBOARD_SCRIPT_PROMISES__ = {};
+  }
+  if (window.__FOXBOARD_SCRIPT_PROMISES__[key]) {
+    return window.__FOXBOARD_SCRIPT_PROMISES__[key];
+  }
+
+  window.__FOXBOARD_SCRIPT_PROMISES__[key] = new Promise<void>((resolve, reject) => {
+    const attr = `data-foxboard-script="${key}"`;
+    const existing = document.querySelector<HTMLScriptElement>(`script[${attr}]`);
+
+    if (existing) {
+      if (existing.dataset.loaded === '1') {
+        resolve();
+      } else {
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Load failed: ${src}`)), { once: true });
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.setAttribute('data-foxboard-script', key);
+    script.addEventListener('load', () => {
+      script.dataset.loaded = '1';
+      resolve();
+    }, { once: true });
+    script.addEventListener('error', () => reject(new Error(`Load failed: ${src}`)), { once: true });
+    document.body.appendChild(script);
+  });
+
+  return window.__FOXBOARD_SCRIPT_PROMISES__[key];
+}
+
 /**
  * PixelOffice - 像素办公室游戏组件
  * 将 game.js 直接嵌入 React，去掉 iframe
  */
 export default function PixelOffice() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const loadedRef = useRef(false);
 
   useEffect(() => {
-    if (loadedRef.current || !containerRef.current) return;
-    loadedRef.current = true;
+    if (!containerRef.current) return;
 
-    // 1. 安装 FoxBoard API 拦截器（让 game.js 的 /status 和 /agents 请求指向 FoxBoard 后端）
-    installFetchInterceptor();
+    let cancelled = false;
+    window.__FOXBOARD_PIXEL_OFFICE_MANUAL_BOOT__ = true;
 
-    // 2. 先加载 layout.js（定义 LAYOUT 常量，game.js 依赖它）
-    const layoutScript = document.createElement('script');
-    layoutScript.src = '/layout.js';
-    layoutScript.onload = () => {
-      // 3. 加载 Phaser 3（CDN）
-      const phaserScript = document.createElement('script');
-      phaserScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js';
-      phaserScript.onload = () => {
-        // 4. 加载 game.js（会自动找到 #game-container 并初始化）
-        const gameScript = document.createElement('script');
-        gameScript.src = '/game.js?v=10';
-        document.body.appendChild(gameScript);
-      };
-      document.body.appendChild(phaserScript);
+    const boot = async () => {
+      // 1. 安装 FoxBoard API 拦截器（让 game.js 的 /status 和 /agents 请求指向 FoxBoard 后端）
+      installFetchInterceptor();
+
+      // 2. 只加载一次脚本，避免路由切回时重复执行 game.js 导致全局变量冲突
+      await loadScriptOnce('layout', '/layout.js');
+      await loadScriptOnce('phaser', 'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js');
+      await loadScriptOnce('game', '/game.js?v=11');
+
+      if (cancelled) return;
+
+      // 3. 每次进入页面都显式初始化；离开页面由 cleanup 销毁
+      if (window.__FOXBOARD_PIXEL_OFFICE_INIT) {
+        await window.__FOXBOARD_PIXEL_OFFICE_INIT();
+      }
     };
-    document.body.appendChild(layoutScript);
+
+    void boot().catch((err) => {
+      console.error('[PixelOffice] boot failed:', err);
+    });
 
     return () => {
-      // 清理：如果 React 切换页面，game.js 会继续运行但容器已卸载
+      cancelled = true;
+      if (window.__FOXBOARD_PIXEL_OFFICE_DESTROY) {
+        window.__FOXBOARD_PIXEL_OFFICE_DESTROY();
+      }
     };
   }, []);
 
