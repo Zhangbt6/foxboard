@@ -24,6 +24,7 @@ from ..models import (
 )
 from ..event_bus import event_bus
 from ..task_context import build_task_context
+from .webhook_handler import trigger_webhooks
 
 
 def _run_async_broadcast(coro):
@@ -407,6 +408,15 @@ def create_task(payload: TaskCreate):
         task_data=task.model_dump(),
     )
 
+    # FB-204: 触发 Webhook (task.created)
+    trigger_webhooks(payload.project_id, "task.created", {
+        "task_id": payload.id,
+        "title": payload.title,
+        "status": "TODO",
+        "assignee_id": payload.assignee_id,
+        "event_type": "task.created",
+    })
+
     # R3: 创建任务时自动通知负责人
     if payload.assignee_id:
         _notify_assignee(payload.id, payload.title, payload.assignee_id)
@@ -555,6 +565,26 @@ def update_task(task_id: str, payload: TaskUpdate):
         actor_id=payload.assignee_id or "system",
         changes={k: v for k, v in payload.model_dump().items() if v is not None},
     )
+
+    # FB-204: 触发 Webhook (task.status_changed / task.completed)
+    if new_status and new_status != old_status:
+        pid = row["project_id"]
+        if new_status == "DONE":
+            trigger_webhooks(pid, "task.completed", {
+                "task_id": task_id,
+                "title": row["title"],
+                "old_status": old_status,
+                "new_status": new_status,
+                "event_type": "task.completed",
+            })
+        else:
+            trigger_webhooks(pid, "task.status_changed", {
+                "task_id": task_id,
+                "title": row["title"],
+                "old_status": old_status,
+                "new_status": new_status,
+                "event_type": "task.status_changed",
+            })
 
     # FB-051: 同步工作流节点状态
     _sync_workflow_node_for_task(task_id, task.status)
@@ -785,6 +815,15 @@ def submit_task(task_id: str, payload: TaskSubmitRequest):
         actor_id=payload.agent_id,
         message=payload.message,
     )
+
+    # FB-204: 触发 Webhook (task.review_requested)
+    trigger_webhooks(row["project_id"], "task.review_requested", {
+        "task_id": task_id,
+        "title": task.title,
+        "message": payload.message,
+        "submitter_id": payload.agent_id,
+        "event_type": "task.review_requested",
+    })
 
     # FB-051: 同步工作流节点状态（submit: DOING → REVIEW → review）
     _sync_workflow_node_for_task(task_id, "REVIEW")

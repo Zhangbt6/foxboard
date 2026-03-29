@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from foxboard_backend.database import init_db, migrate_add_columns, migrate_add_state_detail, migrate_add_messages_and_reports, migrate_add_phases, migrate_add_is_online, migrate_add_capability_tags
-from foxboard_backend.routers import agents, tasks, events, workflows, projects, websocket, messages, reports, analytics, phases
+from foxboard_backend.database import init_db, migrate_add_columns, migrate_add_state_detail, migrate_add_messages_and_reports, migrate_add_phases, migrate_add_is_online, migrate_add_capability_tags, migrate_add_webhooks
+from foxboard_backend.routers import agents, tasks, events, workflows, projects, websocket, messages, reports, analytics, phases, stats, webhooks
 
 TIMEOUT_INTERVAL = int(os.environ.get("TASK_TIMEOUT_INTERVAL_SECONDS", "300"))  # 默认5分钟检测一次
 HEARTBEAT_TIMEOUT = 300  # 5分钟无心跳视为离线
@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI):
     migrate_add_phases()
     migrate_add_is_online()
     migrate_add_capability_tags()
+    migrate_add_webhooks()
     global _scheduler_running
     _scheduler_running = True
     t1 = threading.Thread(target=_timeout_scheduler, daemon=True)
@@ -106,6 +107,8 @@ app.include_router(messages.router)
 app.include_router(reports.router)
 app.include_router(analytics.router)
 app.include_router(phases.router)
+app.include_router(stats.router)
+app.include_router(webhooks.router)
 
 @app.get("/", tags=["health"])
 def root():

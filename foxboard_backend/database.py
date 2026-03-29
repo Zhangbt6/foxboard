@@ -262,6 +262,42 @@ def migrate_add_capability_tags():
     conn.close()
 
 
+def migrate_add_webhooks():
+    """v0.13.0 迁移：新增 webhooks 和 webhook_deliveries 表（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # webhooks 表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS webhooks (
+            id TEXT PRIMARY KEY,
+            url TEXT NOT NULL,
+            events TEXT NOT NULL,
+            secret TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            project_id TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # webhook_deliveries 表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS webhook_deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            webhook_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            response_code INTEGER,
+            delivered_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE
+        )
+    """)
+
+    print("[DB] 迁移：webhooks / webhook_deliveries 表创建完成")
+    conn.commit()
+    conn.close()
+
+
 if __name__ == "__main__":
     init_db()
     migrate_add_columns()

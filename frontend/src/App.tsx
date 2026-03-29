@@ -11,6 +11,7 @@ import Office from './pages/Office';
 import Projects from './pages/Projects';
 import Messages from './pages/Messages';
 import DispatchPanel from './pages/DispatchPanel';
+import Timeline from './pages/Timeline';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/office" element={<Office />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/dispatch" element={<DispatchPanel />} />
+            <Route path="/timeline" element={<Timeline />} />
           </Routes>
         </Layout>
       </BrowserRouter>
