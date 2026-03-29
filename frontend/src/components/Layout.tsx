@@ -1,4 +1,4 @@
-import { LayoutDashboard, Kanban, Users, GitBranch, Activity, Grid, Folder, Mail, GanttChart } from 'lucide-react';
+import { LayoutDashboard, Kanban, Users, GitBranch, Activity, Grid, Folder, Mail, GanttChart, BarChart3 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ProjectSelector from './ProjectSelector';
 
@@ -12,6 +12,7 @@ const navItems = [
   // { to: '/my-tasks', icon: ListTodo, label: '我的任务' },  // Phase 10: 已下架，后续并入看板
   { to: '/office', icon: Grid, label: '像素办公室' },
   { to: '/timeline', icon: GanttChart, label: 'Timeline' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/messages', icon: Mail, label: '消息中心' },
 ];
 

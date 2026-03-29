@@ -21,19 +21,46 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 @router.get("/burndown")
 def get_burndown(
     project_id: str = Query(..., description="项目ID"),
-    phase_id: Optional[str] = Query(None, description="Phase ID"),
+    phase_id: Optional[str] = Query(None, description="Phase ID（单个, 已废弃，请用 phases）"),
+    phases: Optional[str] = Query(None, description="逗号分隔的 Phase ID 列表"),
 ):
     """
     燃尽图数据
     返回每日剩余任务数（按完成时间）
+    支持多 Phase 聚合：指定 phases=phase-12,phase-13 则合并显示
+    不指定时默认取最近 2 个有 done 任务的 Phase
     """
     conn = get_conn()
     cursor = conn.cursor()
 
+    # 解析 phase_id 列表
+    if phases:
+        phase_list = [p.strip() for p in phases.split(",") if p.strip()]
+    elif phase_id:
+        phase_list = [phase_id]
+    else:
+        # 默认：取最近 2 个有 done 任务的 phase（按最后完成时间排序）
+        cursor.execute(f"""
+            SELECT phase_id, MAX(completed_at) as last_done
+            FROM tasks
+            WHERE project_id = '{project_id}'
+              AND phase_id IS NOT NULL
+              AND status = 'DONE'
+              AND completed_at IS NOT NULL
+            GROUP BY phase_id
+            ORDER BY last_done DESC
+            LIMIT 2
+        """)
+        phase_list = [row["phase_id"] for row in cursor.fetchall()]
+        if not phase_list:
+            # 兜底：没有任何已完成的 phase，返回全 0
+            phase_list = []
+
     # 构建过滤条件
     conditions = [f"project_id = '{project_id}'", "status IN ('TODO','DOING','REVIEW','DONE','BLOCKED')"]
-    if phase_id:
-        conditions.append(f"phase_id = '{phase_id}'")
+    if phase_list:
+        phase_filter = "(" + ",".join([f"'{p}'" for p in phase_list]) + ")"
+        conditions.append(f"phase_id IN {phase_filter}")
 
     where_clause = " AND ".join(conditions)
 

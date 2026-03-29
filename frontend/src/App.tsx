@@ -12,6 +12,7 @@ import Projects from './pages/Projects';
 import Messages from './pages/Messages';
 import DispatchPanel from './pages/DispatchPanel';
 import Timeline from './pages/Timeline';
+import Analytics from './pages/Analytics';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/dispatch" element={<DispatchPanel />} />
             <Route path="/timeline" element={<Timeline />} />
+            <Route path="/analytics" element={<Analytics />} />
           </Routes>
         </Layout>
       </BrowserRouter>

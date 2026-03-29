@@ -81,6 +81,18 @@ export const deleteProject = (id: string) => api.delete(`/projects/${id}`);
 export const getEfficiency = (params?: { project_id?: string; date_range?: string }) =>
   api.get('/analytics/efficiency', { params });
 
+export const getBurndown = (params: { project_id: string; phase_id?: string }) =>
+  api.get('/stats/burndown', { params });
+
+export const getVelocity = (params: { project_id: string; phases?: string }) =>
+  api.get('/stats/velocity', { params });
+
+export const getCycleTime = (params: { project_id: string; phase_id?: string }) =>
+  api.get('/stats/cycle-time', { params });
+
+export const getStatusDistribution = (params: { project_id: string; phase_id?: string }) =>
+  api.get('/stats/status-distribution', { params });
+
 // ---- Task Operations (Phase 7) ----
 export const getTask = (task_id: string) =>
   api.get(`/tasks/${task_id}`);
