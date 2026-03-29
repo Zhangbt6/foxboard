@@ -52,7 +52,7 @@ export default function Analytics() {
     try {
       const [bd, vel, ct, sd] = await Promise.all([
         getBurndown({ project_id: pid }).then(r => r.data.data),
-        getVelocity({ project_id: pid }).then(r => r.data.data),
+        getVelocity({ project_id: pid, phases: 'phase-9,phase-10,phase-11,phase-12' }).then(r => r.data.data),
         getCycleTime({ project_id: pid }).then(r => r.data),
         getStatusDistribution({ project_id: pid }).then(r => r.data.data),
       ]);
