@@ -1,30 +1,30 @@
 {
   "/tasks/kanban": {
-    "baseline_ms": 5.0919512286782265,
+    "baseline_ms": 3.688992001116276,
     "version": "1.1"
   },
   "/tasks/": {
-    "baseline_ms": 7.973249070346355,
+    "baseline_ms": 7.590296911075711,
     "version": "1.1"
   },
   "/phases/": {
-    "baseline_ms": 9.813965065404773,
+    "baseline_ms": 10.754771996289492,
     "version": "1.1"
   },
   "/projects/": {
-    "baseline_ms": 6.850515957921743,
+    "baseline_ms": 5.9807689394801855,
     "version": "1.1"
   },
   "/agents/": {
-    "baseline_ms": 7.159871980547905,
+    "baseline_ms": 7.3908360209316015,
     "version": "1.1"
   },
   "/stats/burndown?project_id=foxboard": {
-    "baseline_ms": 9.22065693885088,
+    "baseline_ms": 9.291525930166245,
     "version": "1.1"
   },
   "/analytics/efficiency": {
-    "baseline_ms": 13.240152969956398,
+    "baseline_ms": 8.569805882871151,
     "version": "1.1"
   }
 }
