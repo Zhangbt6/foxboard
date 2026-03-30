@@ -66,6 +66,43 @@ def _calc_phase_stats(cursor, phase_id: str) -> dict:
     return stats
 
 
+def _calc_all_phase_stats(cursor, phase_ids: list) -> dict:
+    """
+    批量计算多个 phase 的任务统计（解决 N+1 问题）。
+    用单个查询获取所有 phase 的 status 分布，
+    再用单个查询获取所有 phase 的 archived 计数。
+    返回 {phase_id: {"task_count": N, "done_count": N, "archived_count": N}}
+    """
+    if not phase_ids:
+        return {}
+
+    placeholders = ",".join(["?"] * len(phase_ids))
+
+    # 一次性获取所有 phase 的 status 分布
+    cursor.execute(
+        f"SELECT phase_id, status, COUNT(*) as cnt FROM tasks WHERE phase_id IN ({placeholders}) GROUP BY phase_id, status",
+        phase_ids,
+    )
+    stats = {pid: {"task_count": 0, "done_count": 0, "archived_count": 0} for pid in phase_ids}
+    for row in cursor.fetchall():
+        pid = row["phase_id"]
+        s = row["status"]
+        c = row["cnt"]
+        stats[pid]["task_count"] += c
+        if s == "DONE":
+            stats[pid]["done_count"] += c
+
+    # 一次性获取所有 phase 的 archived 计数
+    cursor.execute(
+        f"SELECT phase_id, COUNT(*) as cnt FROM tasks WHERE phase_id IN ({placeholders}) AND archived_at IS NOT NULL GROUP BY phase_id",
+        phase_ids,
+    )
+    for row in cursor.fetchall():
+        stats[row["phase_id"]]["archived_count"] = row["cnt"]
+
+    return stats
+
+
 @router.get("/", response_model=List[Phase])
 def list_phases(project_id: Optional[str] = None):
     """列出 phases，支持按 project_id 过滤"""
@@ -86,8 +123,13 @@ def list_phases(project_id: Optional[str] = None):
     cursor.execute(query, params)
     rows = cursor.fetchall()
     result = []
+
+    # 批量获取所有 phase 的统计（解决 N+1 问题）
+    phase_ids = [row["id"] for row in rows]
+    all_stats = _calc_all_phase_stats(cursor, phase_ids)
+
     for row in rows:
-        stats = _calc_phase_stats(cursor, row["id"])
+        stats = all_stats.get(row["id"], {"task_count": 0, "done_count": 0, "archived_count": 0})
         d = dict(row)
         d.update(stats)
         result.append(row_to_phase(d))

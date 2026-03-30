@@ -298,6 +298,60 @@ def migrate_add_webhooks():
     conn.close()
 
 
+def migrate_add_indexes():
+    """v0.14.0 迁移：新增任务和消息表索引以优化查询性能（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    indexes = [
+        ("idx_tasks_project_id", "tasks", "project_id"),
+        ("idx_tasks_status", "tasks", "status"),
+        ("idx_tasks_phase_id", "tasks", "phase_id"),
+        ("idx_tasks_assignee_id", "tasks", "assignee_id"),
+        ("idx_tasks_project_status", "tasks", "project_id, status"),
+        ("idx_tasks_phase_status", "tasks", "phase_id, status"),
+        ("idx_tasks_assignee_status", "tasks", "assignee_id, status"),
+        ("idx_tasks_archived", "tasks", "archived_at"),
+        ("idx_tasks_completed_at", "tasks", "completed_at"),
+        ("idx_tasks_started_at", "tasks", "started_at"),
+        ("idx_messages_ref_task", "messages", "ref_task_id"),
+        ("idx_messages_priority", "messages", "priority"),
+    ]
+
+    for idx_name, table, columns in indexes:
+        cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({columns})")
+        print(f"[DB] 索引 {idx_name} ON {table}({columns}) — 已创建/已存在")
+
+    print("[DB] 迁移：任务和消息表索引创建完成")
+    conn.commit()
+    conn.close()
+
+
+def migrate_add_agents_indexes():
+    """v0.15.0 迁移：新增 agents 表索引以优化查询性能（幂等）"""
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    indexes = [
+        ("idx_agents_last_heartbeat", "agents", "last_heartbeat"),
+        ("idx_agents_is_online", "agents", "is_online"),
+        ("idx_agents_capability_tags", "agents", "capability_tags"),
+    ]
+
+    for idx_name, table, columns in indexes:
+        cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({columns})")
+        print(f"[DB] 索引 {idx_name} ON {table}({columns}) — 已创建/已存在")
+
+    # task_logs 表索引（analytics 效率查询使用）
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_logs_task_id ON task_logs(task_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_logs_event_type ON task_logs(event_type)")
+    print("[DB] 索引 task_logs 相关 — 已创建/已存在")
+
+    print("[DB] 迁移：agents 表索引创建完成")
+    conn.commit()
+    conn.close()
+
+
 if __name__ == "__main__":
     init_db()
     migrate_add_columns()
