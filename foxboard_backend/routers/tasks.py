@@ -13,6 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timezone, timedelta
 
+from ..cache import cache
 from ..database import get_conn
 from ..models import (
     TaskCreate, TaskUpdate, Task, TaskStatus,
@@ -311,6 +312,14 @@ def list_tasks(
     列出任务，支持按 status / assignee_id / project_id / role 过滤。
     role 过滤：按 agents 表的 role 字段筛选（如 'worker' / 'auditor'）
     """
+    # FB-301: 缓存逻辑（仅对 project_id + status 组合缓存，role/assignee_id 过滤不走缓存）
+    cache_key = None
+    if project_id and not assignee_id and not role:
+        cache_key = f"tasks:{project_id}:{status or 'all'}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return [row_to_task(r) for r in cached]
+
     conn = get_conn()
     cursor = conn.cursor()
     query = "SELECT t.* FROM tasks t WHERE t.archived_at IS NULL"
@@ -331,12 +340,23 @@ def list_tasks(
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
+
+    # FB-301: 写入缓存
+    if cache_key:
+        cache.set(cache_key, [dict(r) for r in rows], ttl=30)
+
     return [row_to_task(r) for r in rows]
 
 
 @router.get("/kanban", response_model=KanbanView)
 def kanban_view(project_id: Optional[str] = None):
     """看板视图——四列 TODO / DOING / REVIEW / DONE"""
+    # FB-301: 缓存逻辑
+    cache_key = f"kanban:{project_id or 'all'}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return KanbanView(columns=[KanbanColumn(**col) for col in cached])
+
     conn = get_conn()
     cursor = conn.cursor()
     query = "SELECT * FROM tasks WHERE archived_at IS NULL"
@@ -349,9 +369,15 @@ def kanban_view(project_id: Optional[str] = None):
     rows = cursor.fetchall()
     conn.close()
     columns = []
+    col_data = []
     for status in ["TODO", "DOING", "REVIEW", "DONE", "BLOCKED"]:
-        tasks = [row_to_task(r) for r in rows if r["status"] == status]
-        columns.append(KanbanColumn(status=status, tasks=tasks))
+        col_tasks = [row_to_task(r) for r in rows if r["status"] == status]
+        columns.append(KanbanColumn(status=status, tasks=col_tasks))
+        col_data.append({"status": status, "tasks": [t.model_dump() for t in col_tasks]})
+
+    # FB-301: 写入缓存
+    cache.set(cache_key, col_data, ttl=60)
+
     return KanbanView(columns=columns)
 
 
@@ -420,6 +446,9 @@ def create_task(payload: TaskCreate):
     # R3: 创建任务时自动通知负责人
     if payload.assignee_id:
         _notify_assignee(payload.id, payload.title, payload.assignee_id)
+
+    # FB-301: 缓存失效
+    cache.invalidate_all()
 
     return task
 
@@ -592,6 +621,9 @@ def update_task(task_id: str, payload: TaskUpdate):
     # FB-097: WebSocket 实时推送（修复 update 后不广播的问题）
     _broadcast_task_change(task_id, "updated", task.model_dump())
 
+    # FB-301: 缓存失效（任务数据变更后清空相关缓存）
+    cache.invalidate_all()
+
     return task
 
 
@@ -611,6 +643,9 @@ def delete_task(task_id: str):
 
     # 通过 EventBus 记录删除事件
     event_bus.task_deleted(task_id=task_id, project_id=row["project_id"], actor_id="system")
+
+    # FB-301: 缓存失效
+    cache.invalidate_all()
 
     return {"ok": True, "deleted": task_id, "mode": "destroyed"}
 
@@ -662,6 +697,8 @@ def archive_task(task_id: str, payload: TaskArchiveRequest):
         actor_id=payload.operator_id,
         changes={"archived_at": now, "archive_phase": phase_label.upper()},
     )
+    # FB-301: 缓存失效
+    cache.invalidate_all()
     return {"ok": True, "archived": task_id, "phase": phase_label.upper(), "message": "任务已归档"}
 
 
@@ -765,6 +802,9 @@ def claim_task(task_id: str, payload: TaskClaimRequest):
     )
     tc = TaskContext(**context)
 
+    # FB-301: 缓存失效
+    cache.invalidate_all()
+
     return TaskOperationResponse(ok=True, task=task, message="任务已领取", context=tc)
 
 
@@ -832,6 +872,9 @@ def submit_task(task_id: str, payload: TaskSubmitRequest):
     submitter_name = AGENT_NAME_MAP.get(payload.agent_id, "青狐")
     _notify_black_fox(task_id, task.title, submitter_name)
 
+    # FB-301: 缓存失效
+    cache.invalidate_all()
+
     return TaskOperationResponse(ok=True, task=task, message="任务已提交，等待审核")
 
 
@@ -885,6 +928,9 @@ def review_task(task_id: str, payload: TaskReviewRequest):
     # R3: 审核通过通知执行人 + 花火
     _notify_review_result(task_id, row["title"], row["assignee_id"], passed=True)
 
+    # FB-301: 缓存失效
+    cache.invalidate_all()
+
     return TaskOperationResponse(ok=True, task=task, message="审核通过，任务已完成")
 
 
@@ -934,6 +980,9 @@ def reject_task(task_id: str, payload: TaskRejectRequest):
 
     # R3: 审核打回通知执行人
     _notify_review_result(task_id, row["title"], row["assignee_id"], passed=False, reason=payload.reason)
+
+    # FB-301: 缓存失效
+    cache.invalidate_all()
 
     return TaskOperationResponse(ok=True, task=task, message=f"任务已打回：{payload.reason}")
 

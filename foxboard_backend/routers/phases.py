@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 
+from ..cache import cache
+
 from ..database import get_conn
 from ..models import PhaseCreate, PhaseUpdate, Phase, PhaseStatus
 
@@ -67,6 +69,12 @@ def _calc_phase_stats(cursor, phase_id: str) -> dict:
 @router.get("/", response_model=List[Phase])
 def list_phases(project_id: Optional[str] = None):
     """列出 phases，支持按 project_id 过滤"""
+    # FB-301: 缓存逻辑
+    cache_key = f"phases:{project_id or 'all'}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return [Phase(**p) for p in cached]
+
     conn = get_conn()
     cursor = conn.cursor()
     query = "SELECT p.* FROM phases p WHERE 1=1"
@@ -84,6 +92,10 @@ def list_phases(project_id: Optional[str] = None):
         d.update(stats)
         result.append(row_to_phase(d))
     conn.close()
+
+    # FB-301: 写入缓存
+    cache.set(cache_key, [r.model_dump() for r in result], ttl=300)
+
     return result
 
 
@@ -136,6 +148,10 @@ def create_phase(payload: PhaseCreate):
     cursor.execute("SELECT * FROM phases WHERE id = ?", (payload.id,))
     row = cursor.fetchone()
     conn.close()
+
+    # FB-301: 缓存失效
+    cache.invalidate_phases()
+
     return row_to_phase(row)
 
 
@@ -164,6 +180,7 @@ def update_phase(phase_id: str, payload: PhaseUpdate):
         updates["summary"] = payload.summary
     if not updates:
         conn.close()
+        cache.invalidate_phases()
         return row_to_phase(row)
     updates["updated_at"] = datetime.utcnow().isoformat()
     set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
@@ -178,6 +195,10 @@ def update_phase(phase_id: str, payload: PhaseUpdate):
     d = dict(updated)
     d.update(stats)
     conn.close()
+
+    # FB-301: 缓存失效
+    cache.invalidate_phases()
+
     return row_to_phase(d)
 
 
@@ -203,6 +224,10 @@ def activate_phase(phase_id: str):
     d = dict(updated)
     d.update(stats)
     conn.close()
+
+    # FB-301: 缓存失效
+    cache.invalidate_phases()
+
     return row_to_phase(d)
 
 
@@ -237,6 +262,10 @@ def complete_phase(phase_id: str):
     d = dict(updated)
     d.update(stats)
     conn.close()
+
+    # FB-301: 缓存失效
+    cache.invalidate_phases()
+
     return row_to_phase(d)
 
 
